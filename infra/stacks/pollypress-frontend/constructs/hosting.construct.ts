@@ -25,18 +25,10 @@ export class FrontendHostingConstruct extends Construct {
             autoDeleteObjects: true,
         });
 
-        const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'OAI', {
-            comment: `OAI for ${props.appName}`,
-        });
-
-        this.bucket.grantRead(originAccessIdentity);
-
         this.distribution = new cloudfront.Distribution(this, 'Distribution', {
             defaultRootObject: 'index.html',
             defaultBehavior: {
-                origin: new origins.S3Origin(this.bucket, {
-                    originAccessIdentity,
-                }),
+                origin: origins.S3BucketOrigin.withOriginAccessControl(this.bucket),
                 viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             },
             errorResponses: [
