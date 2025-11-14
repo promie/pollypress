@@ -8,7 +8,13 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "dev": "cd frontend && npm run dev",
+    "deploy": "cd frontend && npm run build && cd .. && AWS_PROFILE=promie npm run build && AWS_PROFILE=promie npx cdk deploy --all",
+    "deploy:infra": "AWS_PROFILE=promie npm run build && AWS_PROFILE=promie npx cdk deploy",
+    "diff": "AWS_PROFILE=promie npx cdk diff",
+    "synth": "AWS_PROFILE=promie npx cdk synth",
+    "destroy": "AWS_PROFILE=promie npx cdk destroy"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -21,6 +27,7 @@
   },
   "dependencies": {
     "aws-cdk-lib": "2.215.0",
-    "constructs": "^10.0.0"
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
   }
 }
