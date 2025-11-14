@@ -42,7 +42,7 @@ export class FrontendHostingConstruct extends Construct {
         });
 
         new s3deploy.BucketDeployment(this, 'DeployFrontend', {
-            sources: [s3deploy.Source.asset('../frontend/dist')],
+            sources: [s3deploy.Source.asset('./frontend/dist')],
             destinationBucket: this.bucket,
             distribution: this.distribution,
             distributionPaths: ['/*'],
