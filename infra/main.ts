@@ -25,8 +25,8 @@ const baseProps: StackProps = {
 
 const app = new App();
 
-// Create certificate stack in us-east-1 if domain is configured
 let certificateStack;
+
 if (DOMAIN_NAME && (FRONTEND_SUBDOMAIN || BACKEND_SUBDOMAIN)) {
     const subdomains = [FRONTEND_SUBDOMAIN, BACKEND_SUBDOMAIN].filter(Boolean) as string[];
 
@@ -35,6 +35,7 @@ if (DOMAIN_NAME && (FRONTEND_SUBDOMAIN || BACKEND_SUBDOMAIN)) {
             account: CDK_DEPLOY_ACCOUNT,
             region: 'us-east-1', // CloudFront requires certificates in us-east-1
         },
+        crossRegionReferences: true,
         stackName: `${APP_NAME}-Certificate-${STAGE}`,
         domainName: DOMAIN_NAME,
         subdomains: subdomains,
@@ -53,6 +54,7 @@ const backendStack = new PollyPressBackendStack(app, `${APP_NAME}BackendStack`, 
 
 new PollyPressFrontendStack(app, `${APP_NAME}FrontendStack`, {
     ...baseProps,
+    crossRegionReferences: true,
     stackName: `${APP_NAME}-Frontend-${STAGE}`,
     appName: APP_NAME,
     stage: STAGE,
