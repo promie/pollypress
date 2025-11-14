@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts bin/pollypress.ts",
+  "app": "npx ts-node --prefer-ts-exts infra/main.ts",
   "watch": {
     "include": [
       "**"
