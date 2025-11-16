@@ -1,38 +1,26 @@
 import { APIGatewayProxyHandler, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { createLogger } from '../../common/logger';
+import { getCorsHeaders, createCorsPreflightResponse } from '../../common/cors/cors';
 import { generatePresignedUploadUrl } from './commands/generatePresignedUploadUrl.command';
+import { initConfig } from './config';
+import { bodySchema } from './bodySchema';
 
 const logger = createLogger('upload-api');
-const INPUT_BUCKET = process.env.INPUT_BUCKET!;
-
-type UploadRequest = {
-    fileName: string;
-    fileType: string;
-};
+const { INPUT_BUCKET } = initConfig();
 
 export const handler: APIGatewayProxyHandler = async (event, context: Context): Promise<APIGatewayProxyResult> => {
     logger.info('Upload API request received', {
-        requestId: context.requestId,
+        requestId: context.awsRequestId,
         httpMethod: event.httpMethod,
         path: event.path,
     });
 
-    // CORS headers
-    const headers = {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*', // In production, restrict to your domain
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST,OPTIONS',
-    };
+    const headers = getCorsHeaders();
 
     // Handle preflight OPTIONS request
     if (event.httpMethod === 'OPTIONS') {
         logger.info('CORS preflight request');
-        return {
-            statusCode: 200,
-            headers,
-            body: '',
-        };
+        return createCorsPreflightResponse();
     }
 
     try {
@@ -45,28 +33,25 @@ export const handler: APIGatewayProxyHandler = async (event, context: Context): 
             };
         }
 
-        const body: UploadRequest = JSON.parse(event.body);
-        const { fileName, fileType } = body;
+        const parsedBody = JSON.parse(event.body);
+        const validationResult = bodySchema.safeParse(parsedBody);
 
-        if (!fileName || !fileType) {
-            logger.warn('Missing required fields', { fileName: !!fileName, fileType: !!fileType });
+        if (!validationResult.success) {
+            logger.warn('Invalid request body', { errors: validationResult.error.issues });
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'fileName and fileType are required' }),
+                body: JSON.stringify({
+                    error: 'Invalid request body',
+                    details: validationResult.error.issues.map(issue => ({
+                        path: issue.path.join('.'),
+                        message: issue.message,
+                    })),
+                }),
             };
         }
 
-        // Validate file type
-        const allowedTypes = ['text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-        if (!allowedTypes.includes(fileType)) {
-            logger.warn('Invalid file type', { fileType, allowedTypes });
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: 'Invalid file type. Only .txt, .doc, and .docx files are allowed' }),
-            };
-        }
+        const { fileName, fileType } = validationResult.data;
 
         // Generate presigned URL using command
         const result = await generatePresignedUploadUrl({
