@@ -1,18 +1,21 @@
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { uploadFile } from '../services/uploadService';
 
-type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
+type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
 export const FileUpload = () => {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       setFile(acceptedFiles[0]);
       setStatus('idle');
       setAudioUrl(null);
+      setErrorMessage('');
     }
   }, []);
 
@@ -30,12 +33,20 @@ export const FileUpload = () => {
     if (!file) return;
 
     setStatus('uploading');
+    setErrorMessage('');
 
-    // TODO: Implement actual upload logic with presigned URL
-    setTimeout(() => {
+    try {
+      await uploadFile(file);
+
+      // For now, just show success after upload
+      // TODO: Later we'll add polling for the Polly-processed audio file
       setStatus('success');
-      setAudioUrl('https://example.com/audio.mp3'); // Placeholder
-    }, 2000);
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      setStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'An unknown error occurred');
+    }
   };
 
   return (
@@ -100,38 +111,47 @@ export const FileUpload = () => {
         </div>
       )}
 
-      {status === 'uploading' && (
+      {(status === 'uploading' || status === 'processing') && (
         <div className="mt-10 flex flex-col items-center gap-5">
           <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-800 rounded-full animate-spin"></div>
-          <p className="text-lg text-gray-700">Converting your document...</p>
+          <p className="text-lg text-gray-700">
+            {status === 'uploading' ? 'Uploading your document...' : 'Converting to speech...'}
+          </p>
         </div>
       )}
 
-      {status === 'success' && audioUrl && (
+      {status === 'success' && (
         <div className="mt-10 p-8 rounded-2xl bg-green-50 border-2 border-green-600">
           <div className="flex flex-col items-center gap-4">
             <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-600">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
-            <p className="text-2xl font-semibold text-gray-900">Your audio is ready!</p>
-            <audio controls src={audioUrl} className="w-full mt-4 rounded-lg">
-              Your browser does not support the audio element.
-            </audio>
-            <a
-              href={audioUrl}
-              download
-              className="mt-4 px-8 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 active:scale-95 transition-all duration-200 shadow-lg shadow-green-600/30"
-            >
-              Download MP3
-            </a>
+            <p className="text-2xl font-semibold text-gray-900">File uploaded successfully!</p>
+            <p className="text-gray-600">Your file has been uploaded to S3.</p>
+            {audioUrl && (
+              <>
+                <audio controls src={audioUrl} className="w-full mt-4 rounded-lg">
+                  Your browser does not support the audio element.
+                </audio>
+                <a
+                  href={audioUrl}
+                  download
+                  className="mt-4 px-8 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 active:scale-95 transition-all duration-200 shadow-lg shadow-green-600/30"
+                >
+                  Download MP3
+                </a>
+              </>
+            )}
           </div>
         </div>
       )}
 
       {status === 'error' && (
         <div className="mt-10 p-6 rounded-2xl bg-red-50 border-2 border-red-600">
-          <p className="text-lg text-red-600 text-center">Something went wrong. Please try again.</p>
+          <p className="text-lg text-red-600 text-center">
+            {errorMessage || 'Something went wrong. Please try again.'}
+          </p>
         </div>
       )}
     </div>
