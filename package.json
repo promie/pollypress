@@ -17,6 +17,7 @@
     "destroy": "AWS_PROFILE=promie npx cdk destroy"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.158",
     "@types/jest": "^29.5.14",
     "@types/node": "22.7.9",
     "aws-cdk": "2.1031.2",
@@ -27,6 +28,10 @@
     "typescript": "~5.6.3"
   },
   "dependencies": {
+    "@aws-lambda-powertools/logger": "^2.28.1",
+    "@aws-sdk/client-polly": "^3.932.0",
+    "@aws-sdk/client-s3": "^3.932.0",
+    "@aws-sdk/s3-request-presigner": "^3.932.0",
     "aws-cdk-lib": "2.215.0",
     "constructs": "^10.0.0",
     "source-map-support": "^0.5.21"
