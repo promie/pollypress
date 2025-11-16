@@ -5,7 +5,8 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 import { StandardLambda } from '../../../../common/StandardLambda';
-import { ApiGatewayDomainConstruct } from '../common/apiGatewayDomain.construct';
+import { StandardRestApi } from '../../../../common/StandardRestApi';
+import type { Config } from '../../../../../app/src/pollypress/handlers/uploadApi/config';
 
 export type UploadApiConstructProps = {
     appName: string;
@@ -34,41 +35,21 @@ export class UploadApiConstruct extends Construct {
             timeout: Duration.seconds(30),
             environment: {
                 INPUT_BUCKET: inputBucket.bucketName,
-            },
+            } satisfies Config,
         });
 
         inputBucket.grantPut(this.uploadHandler);
 
-        this.api = new apigateway.RestApi(this, 'Api', {
-            restApiName: `${appName}-${stage}-api`,
-            description: `${appName} API (${stage})`,
-            deployOptions: {
-                stageName: stage,
-                tracingEnabled: true,
-                loggingLevel: apigateway.MethodLoggingLevel.INFO,
-                dataTraceEnabled: true,
-                metricsEnabled: true,
-            },
-            defaultCorsPreflightOptions: {
-                allowOrigins: apigateway.Cors.ALL_ORIGINS,
-                allowMethods: apigateway.Cors.ALL_METHODS,
-                allowHeaders: ['Content-Type', 'Authorization'],
-            },
+        const restApi = new StandardRestApi(this, 'RestApi', {
+            appName,
+            stage,
+            domainName,
+            subdomain,
+            certificate,
         });
 
-        const customDomain = domainName && subdomain ? `${subdomain}.${domainName}` : undefined;
-
-        if (customDomain && certificate && domainName) {
-            const domainConfig = new ApiGatewayDomainConstruct(this, 'DomainConfig', {
-                api: this.api,
-                customDomain,
-                baseDomain: domainName,
-                certificate,
-            });
-            this.apiUrl = domainConfig.apiUrl;
-        } else {
-            this.apiUrl = this.api.url;
-        }
+        this.api = restApi.api;
+        this.apiUrl = restApi.apiUrl;
 
         const upload = this.api.root.addResource('upload');
 
