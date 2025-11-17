@@ -5,43 +5,13 @@ import { Readable } from 'stream';
 import { createLogger } from '../../../common/logger';
 import { initConfig } from './config';
 import { queueMessageSchema, type QueueMessage } from '../receiver/queueMessageSchema';
+import { streamToBuffer, extractText } from '../utils/fileUtils';
 
 const logger = createLogger('polly-event-processor');
 const s3Client = new S3Client({});
 const pollyClient = new PollyClient({});
 const config = initConfig();
 
-/**
- * Converts a readable stream to a buffer
- */
-async function streamToBuffer(stream: Readable): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        stream.on('data', (chunk) => chunks.push(chunk));
-        stream.on('error', reject);
-        stream.on('end', () => resolve(Buffer.concat(chunks)));
-    });
-}
-
-/**
- * Extracts text from different file types
- */
-async function extractText(fileContent: Buffer, fileKey: string): Promise<string> {
-    const extension = fileKey.split('.').pop()?.toLowerCase();
-
-    // For now, we only handle .txt files
-    // TODO: Add support for .doc and .docx using libraries like mammoth
-    if (extension === 'txt') {
-        return fileContent.toString('utf-8');
-    }
-
-    throw new Error(`Unsupported file type: ${extension}. Currently only .txt files are supported.`);
-}
-
-/**
- * SQS Event Handler - Triggered when a message is received from the processing queue
- * Processes the file and converts it to speech using Amazon Polly
- */
 export const handler: SQSHandler = async (event: SQSEvent, context: Context): Promise<SQSBatchResponse> => {
     logger.info('Polly Event Processor triggered', {
         requestId: context.awsRequestId,
@@ -71,7 +41,6 @@ export const handler: SQSHandler = async (event: SQSEvent, context: Context): Pr
         logger.info('Processing file from queue', { bucket, key, fileSize, messageId });
 
         try {
-            // 1. Download the file from S3
             logger.info('Downloading file from S3', { key });
             const getCommand = new GetObjectCommand({
                 Bucket: bucket,
@@ -89,7 +58,6 @@ export const handler: SQSHandler = async (event: SQSEvent, context: Context): Pr
                 contentLength: fileContent.length
             });
 
-            // 2. Extract text from the file
             logger.info('Extracting text from file', { key });
             const text = await extractText(fileContent, key);
             logger.info('Text extracted successfully', {
@@ -101,7 +69,6 @@ export const handler: SQSHandler = async (event: SQSEvent, context: Context): Pr
                 throw new Error('No text content found in file');
             }
 
-            // Limit text length (Polly has a 3000 character limit for standard voices)
             const truncatedText = text.slice(0, 3000);
             if (text.length > 3000) {
                 logger.warn('Text truncated to fit Polly limit', {
@@ -110,7 +77,6 @@ export const handler: SQSHandler = async (event: SQSEvent, context: Context): Pr
                 });
             }
 
-            // 3. Convert text to speech using Amazon Polly
             logger.info('Synthesizing speech with Amazon Polly', {
                 textLength: truncatedText.length,
                 voiceId: 'Joanna',
@@ -120,8 +86,8 @@ export const handler: SQSHandler = async (event: SQSEvent, context: Context): Pr
             const pollyCommand = new SynthesizeSpeechCommand({
                 Text: truncatedText,
                 OutputFormat: 'mp3',
-                VoiceId: 'Joanna', // You can make this configurable
-                Engine: 'neural', // Neural voices sound more natural
+                VoiceId: 'Joanna', 
+                Engine: 'neural',
                 LanguageCode: 'en-US',
             });
 
@@ -136,7 +102,6 @@ export const handler: SQSHandler = async (event: SQSEvent, context: Context): Pr
                 audioSize: audioBuffer.length
             });
 
-            // 4. Upload the audio file to the output bucket
             const fileId = key.split('/').pop()?.split('.')[0];
             const outputKey = `output/${fileId}.mp3`;
 
@@ -171,7 +136,6 @@ export const handler: SQSHandler = async (event: SQSEvent, context: Context): Pr
                 error: error instanceof Error ? error.message : 'Unknown error',
                 stack: error instanceof Error ? error.stack : undefined,
             });
-            // Report this message as failed so it can be retried or sent to DLQ
             batchItemFailures.push({ itemIdentifier: messageId });
         }
     }
