@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import type { FileRejection } from 'react-dropzone';
 import { uploadFile } from '../services/uploadService';
 import { pollForAudioFile, downloadAudioFile } from '../services/downloadService';
 
@@ -12,7 +13,25 @@ export const FileUpload = () => {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [pollingProgress, setPollingProgress] = useState<{ current: number; max: number } | null>(null);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
+    // Handle rejected files (wrong type)
+    if (rejectedFiles.length > 0) {
+      const rejectedFile = rejectedFiles[0];
+      const fileName = rejectedFile.file.name;
+      const fileExtension = fileName.split('.').pop()?.toLowerCase() || 'unknown';
+
+      setFile(null);
+      setStatus('error');
+      setErrorMessage(
+        `Sorry, "${fileName}" is not supported. Only .txt files are accepted. ` +
+        `You uploaded a .${fileExtension} file.`
+      );
+      setAudioUrl(null);
+      setPollingProgress(null);
+      return;
+    }
+
+    // Handle accepted files
     if (acceptedFiles.length > 0) {
       setFile(acceptedFiles[0]);
       setStatus('idle');
