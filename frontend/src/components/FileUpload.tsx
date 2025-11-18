@@ -26,8 +26,6 @@ export const FileUpload = () => {
     onDrop,
     accept: {
       'text/plain': ['.txt'],
-      'application/msword': ['.doc'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
     },
     maxFiles: 1,
   });
@@ -126,7 +124,7 @@ export const FileUpload = () => {
               <p className="text-xl text-gray-700">Drag & drop your file here</p>
               <p className="text-base text-gray-500">or click to browse</p>
             </div>
-            <p className="text-sm text-gray-400 mt-2">Supports .txt, .doc, .docx</p>
+            <p className="text-sm text-gray-400 mt-2">Supports .txt files only</p>
           </div>
         )}
       </div>
