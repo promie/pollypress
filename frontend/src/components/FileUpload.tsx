@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { uploadFile } from '../services/uploadService';
+import { pollForAudioFile, downloadAudioFile } from '../services/downloadService';
 
 type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
@@ -9,6 +10,7 @@ export const FileUpload = () => {
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [pollingProgress, setPollingProgress] = useState<{ current: number; max: number } | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -16,6 +18,7 @@ export const FileUpload = () => {
       setStatus('idle');
       setAudioUrl(null);
       setErrorMessage('');
+      setPollingProgress(null);
     }
   }, []);
 
@@ -34,19 +37,47 @@ export const FileUpload = () => {
 
     setStatus('uploading');
     setErrorMessage('');
+    setPollingProgress(null);
 
     try {
-      await uploadFile(file);
+      // Step 1: Upload file to S3
+      const uploadResult = await uploadFile(file);
+      console.log('Upload complete, file key:', uploadResult.fileKey);
 
-      // For now, just show success after upload
-      // TODO: Later we'll add polling for the Polly-processed audio file
+      // Step 2: Poll for the processed audio file
+      setStatus('processing');
+
+      const downloadResult = await pollForAudioFile(uploadResult.fileKey, {
+        maxAttempts: 30,
+        intervalMs: 2000,
+        onProgress: (attempt, max) => {
+          setPollingProgress({ current: attempt, max });
+        },
+      });
+
+      console.log('Audio file ready, download URL:', downloadResult.downloadUrl);
+
+      // Step 3: Set the audio URL for playback
+      setAudioUrl(downloadResult.downloadUrl);
       setStatus('success');
+      setPollingProgress(null);
 
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('Upload/Processing error:', error);
       setStatus('error');
       setErrorMessage(error instanceof Error ? error.message : 'An unknown error occurred');
+      setPollingProgress(null);
     }
+  };
+
+  const handleDownload = () => {
+    if (!audioUrl || !file) return;
+
+    // Generate a nice filename for the download
+    const baseFileName = file.name.replace(/\.[^.]+$/, '');
+    const downloadFileName = `${baseFileName}.mp3`;
+
+    downloadAudioFile(audioUrl, downloadFileName);
   };
 
   return (
@@ -117,6 +148,11 @@ export const FileUpload = () => {
           <p className="text-lg text-gray-700">
             {status === 'uploading' ? 'Uploading your document...' : 'Converting to speech...'}
           </p>
+          {pollingProgress && (
+            <p className="text-sm text-gray-500">
+              Checking for processed file... (attempt {pollingProgress.current} of {pollingProgress.max})
+            </p>
+          )}
         </div>
       )}
 
@@ -127,20 +163,19 @@ export const FileUpload = () => {
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
-            <p className="text-2xl font-semibold text-gray-900">File uploaded successfully!</p>
-            <p className="text-gray-600">Your file has been uploaded to S3.</p>
+            <p className="text-2xl font-semibold text-gray-900">Conversion complete!</p>
+            <p className="text-gray-600">Your audio file is ready to play or download.</p>
             {audioUrl && (
               <>
                 <audio controls src={audioUrl} className="w-full mt-4 rounded-lg">
                   Your browser does not support the audio element.
                 </audio>
-                <a
-                  href={audioUrl}
-                  download
+                <button
+                  onClick={handleDownload}
                   className="mt-4 px-8 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 active:scale-95 transition-all duration-200 shadow-lg shadow-green-600/30"
                 >
                   Download MP3
-                </a>
+                </button>
               </>
             )}
           </div>

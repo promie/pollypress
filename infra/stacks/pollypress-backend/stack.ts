@@ -30,6 +30,7 @@ export class PollyPressBackendStack extends Stack {
             appName,
             stage,
             inputBucket: storage.inputBucket,
+            outputBucket: storage.outputBucket,
             domainName,
             subdomain,
             certificate,
