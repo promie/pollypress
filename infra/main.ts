@@ -44,6 +44,7 @@ if (DOMAIN_NAME && (FRONTEND_SUBDOMAIN || BACKEND_SUBDOMAIN)) {
 
 const backendStack = new PollyPressBackendStack(app, `${APP_NAME}BackendStack`, {
     ...baseProps,
+    crossRegionReferences: true,
     stackName: `${APP_NAME}-Backend-${STAGE}`,
     appName: APP_NAME,
     stage: STAGE,
