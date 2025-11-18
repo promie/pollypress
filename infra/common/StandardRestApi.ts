@@ -1,5 +1,6 @@
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { ApiGatewayDomainConstruct } from '../stacks/pollypress-backend/constructs/common/apiGatewayDomain.construct';
 
@@ -41,6 +42,17 @@ export class StandardRestApi extends Construct {
             dataTraceEnabled = true,
             metricsEnabled = true,
         } = props;
+
+        const cloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
+            assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+            managedPolicies: [
+                iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs'),
+            ],
+        });
+
+        new apigateway.CfnAccount(this, 'ApiGatewayAccount', {
+            cloudWatchRoleArn: cloudWatchRole.roleArn,
+        });
 
         this.api = new apigateway.RestApi(this, 'Api', {
             restApiName: `${appName}-${stage}-api`,
