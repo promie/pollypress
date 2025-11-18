@@ -6,12 +6,14 @@ import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 import { StandardLambda } from '../../../../common/StandardLambda';
 import { StandardRestApi } from '../../../../common/StandardRestApi';
-import type { Config } from '../../../../../app/src/pollypress/handlers/uploadApi/config';
+import type { Config as UploadConfig } from '../../../../../app/src/pollypress/handlers/uploadApi/config';
+import type { Config as DownloadConfig } from '../../../../../app/src/pollypress/handlers/downloadApi/config';
 
 export type UploadApiConstructProps = {
     appName: string;
     stage: string;
     inputBucket: s3.Bucket;
+    outputBucket: s3.Bucket;
     domainName?: string;
     subdomain?: string;
     certificate?: acm.ICertificate;
@@ -20,12 +22,13 @@ export type UploadApiConstructProps = {
 export class UploadApiConstruct extends Construct {
     public readonly api: apigateway.RestApi;
     public readonly uploadHandler: lambda.Function;
+    public readonly downloadHandler: lambda.Function;
     public readonly apiUrl: string;
 
     constructor(scope: Construct, id: string, props: UploadApiConstructProps) {
         super(scope, id);
 
-        const { appName, stage, inputBucket, domainName, subdomain, certificate } = props;
+        const { appName, stage, inputBucket, outputBucket, domainName, subdomain, certificate } = props;
 
         this.uploadHandler = new StandardLambda(this, 'UploadHandler', {
             appName,
@@ -35,10 +38,23 @@ export class UploadApiConstruct extends Construct {
             timeout: Duration.seconds(30),
             environment: {
                 INPUT_BUCKET: inputBucket.bucketName,
-            } satisfies Config,
+            } satisfies UploadConfig,
         });
 
         inputBucket.grantPut(this.uploadHandler);
+
+        this.downloadHandler = new StandardLambda(this, 'DownloadHandler', {
+            appName,
+            entry: 'app/src/pollypress/handlers/downloadApi/downloadApi.handler.ts',
+            handler: 'handler',
+            memorySize: 256,
+            timeout: Duration.seconds(30),
+            environment: {
+                OUTPUT_BUCKET: outputBucket.bucketName,
+            } satisfies DownloadConfig,
+        });
+
+        outputBucket.grantRead(this.downloadHandler);
 
         const restApi = new StandardRestApi(this, 'RestApi', {
             appName,
@@ -55,6 +71,11 @@ export class UploadApiConstruct extends Construct {
 
         // /upload endpoint
         upload.addMethod('POST', new apigateway.LambdaIntegration(this.uploadHandler));
+
+        const download = this.api.root.addResource('download');
+
+        // /download endpoint
+        download.addMethod('GET', new apigateway.LambdaIntegration(this.downloadHandler));
 
         // /status endpoint (to check API health)
         const status = this.api.root.addResource('status');
