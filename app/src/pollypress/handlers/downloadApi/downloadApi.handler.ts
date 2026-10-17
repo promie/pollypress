@@ -82,6 +82,8 @@ export const handler: APIGatewayProxyHandler = async (event, context: Context): 
                 body: JSON.stringify({
                     error: 'Processing failed',
                     message: jobStatus.reason,
+                    code: jobStatus.code,
+                    retryAt: jobStatus.retryAt,
                 }),
             };
         }

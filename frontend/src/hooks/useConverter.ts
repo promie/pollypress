@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { uploadFile } from '../services/uploadService';
 import { pollForAudioFile, downloadAudioFile } from '../services/downloadService';
-import type { ProcessingProgress } from '../services/downloadService';
+import { ProcessingFailedError } from '../services/downloadService';
+import type { FailureCode, ProcessingProgress } from '../services/downloadService';
 import { UnauthorizedError } from '../services/authService';
 
 export type Phase = 'idle' | 'ready' | 'uploading' | 'converting' | 'done' | 'error';
@@ -16,6 +17,10 @@ export type ConverterState = {
   // null = not downloading; -1 = downloading, size unknown
   downloadPercent: number | null;
   error: string | null;
+  // Set for known failures so the view can tailor its message
+  errorCode: FailureCode | null;
+  // When a limit-blocked file can be tried again (ISO 8601)
+  retryAt: string | null;
 };
 
 export const initialConverterState: ConverterState = {
@@ -27,6 +32,8 @@ export const initialConverterState: ConverterState = {
   audioUrl: null,
   downloadPercent: null,
   error: null,
+  errorCode: null,
+  retryAt: null,
 };
 
 export const audioFileName = (file: File): string => `${file.name.replace(/\.[^.]+$/, '')}.mp3`;
@@ -93,6 +100,8 @@ export function useConverter({ onUnauthorized }: { onUnauthorized: () => void })
       update({
         phase: 'error',
         error: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+        errorCode: error instanceof ProcessingFailedError ? error.code ?? null : null,
+        retryAt: error instanceof ProcessingFailedError ? error.retryAt ?? null : null,
       });
     }
   }, [state, onUnauthorized]);

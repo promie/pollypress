@@ -21,7 +21,12 @@ import {
 } from '../receiver/queueMessageSchema';
 import { streamToBuffer, extractText, normalizeText, UnprocessableFileError } from '../utils/fileUtils';
 import { splitIntoChunks, mapWithConcurrency } from '../utils/textChunker';
-import { reserveDailyCharacters } from '../utils/dailyUsage';
+import {
+    reserveDailyCharacters,
+    describeAudioLength,
+    nextDailyReset,
+    CHARACTERS_PER_MINUTE,
+} from '../utils/dailyUsage';
 
 const logger = createLogger('polly-event-processor');
 const s3Client = new S3Client({});
@@ -223,8 +228,9 @@ const startProcessing = async (message: QueueMessage, fileId: string, context: C
     // Hard ceiling on Polly spend: Polly bills per character
     if (text.length > config.DAILY_CHARACTER_LIMIT) {
         throw new UnprocessableFileError(
-            `This document has ${text.length.toLocaleString('en-US')} characters, which is more than the ` +
-            `${config.DAILY_CHARACTER_LIMIT.toLocaleString('en-US')} that can be converted in one day.`
+            `This document would be ${describeAudioLength(text.length)} of audio, but the daily limit is ` +
+            `${describeAudioLength(config.DAILY_CHARACTER_LIMIT)}. Try splitting it into smaller files.`,
+            { code: 'DOCUMENT_TOO_LONG' }
         );
     }
 
@@ -236,9 +242,14 @@ const startProcessing = async (message: QueueMessage, fileId: string, context: C
     });
     logger.info('Daily character reservation', { fileId, characters: text.length, reservation });
 
-    if (reservation === 'limit-reached') {
+    if (reservation.status === 'limit-reached') {
+        const remaining = Math.max(0, config.DAILY_CHARACTER_LIMIT - reservation.usedToday);
         throw new UnprocessableFileError(
-            'The daily conversion limit has been reached. Please try again tomorrow (the limit resets at midnight UTC).'
+            remaining < CHARACTERS_PER_MINUTE
+                ? `Today's limit of ${describeAudioLength(config.DAILY_CHARACTER_LIMIT)} of audio has been used up.`
+                : `This document needs ${describeAudioLength(text.length)} of audio, but only ` +
+                  `${describeAudioLength(remaining)} of today's ${describeAudioLength(config.DAILY_CHARACTER_LIMIT).replace('about ', '')} is left.`,
+            { code: 'DAILY_LIMIT_REACHED', retryAt: nextDailyReset().toISOString() }
         );
     }
 
@@ -318,7 +329,12 @@ export const handler: SQSHandler = async (event: SQSEvent, context: Context): Pr
                 // Retrying won't help - record the failure so the user sees it
                 logger.warn('File cannot be processed', { fileId, messageId, reason: errorMessage });
                 try {
-                    await writeStatus(fileId, { state: 'failed', reason: errorMessage });
+                    await writeStatus(fileId, {
+                        state: 'failed',
+                        reason: errorMessage,
+                        code: error.code,
+                        retryAt: error.retryAt,
+                    });
                 } catch (statusError) {
                     logger.error('Failed to write failure status', { fileId, error: statusError });
                     batchItemFailures.push({ itemIdentifier: messageId });

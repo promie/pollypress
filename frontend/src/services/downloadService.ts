@@ -14,11 +14,28 @@ export type ProcessingProgress = {
   totalChunks: number;
 };
 
+export type FailureCode = 'DAILY_LIMIT_REACHED' | 'DOCUMENT_TOO_LONG';
+
 export type DownloadError = {
   error: string;
   message?: string;
   progress?: ProcessingProgress;
+  code?: FailureCode;
+  retryAt?: string;
 };
+
+/** The file couldn't be converted; `code` identifies known cases like the daily limit. */
+export class ProcessingFailedError extends Error {
+  readonly code?: FailureCode;
+  readonly retryAt?: string;
+
+  constructor(message: string, details: { code?: FailureCode; retryAt?: string } = {}) {
+    super(message);
+    this.name = 'ProcessingFailedError';
+    this.code = details.code;
+    this.retryAt = details.retryAt;
+  }
+}
 
 /**
  * Thrown while the audio is still being generated. Carries progress once the
@@ -58,7 +75,10 @@ export async function requestDownloadUrl(fileKey: string): Promise<DownloadRespo
       throw new FileNotReadyError(error.progress);
     }
 
-    throw new Error(error.message || error.error || 'Failed to get download URL');
+    throw new ProcessingFailedError(error.message || error.error || 'Failed to get download URL', {
+      code: error.code,
+      retryAt: error.retryAt,
+    });
   }
 
   return response.json();

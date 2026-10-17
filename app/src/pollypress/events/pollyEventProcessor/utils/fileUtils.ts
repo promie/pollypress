@@ -1,14 +1,20 @@
 import { Readable } from 'stream';
 import { extractText as extractPdfText, getDocumentProxy } from 'unpdf';
+import type { FailureCode } from '../../../common/jobStatus';
 
 /**
  * Error for inputs that will never succeed (bad file type, no text, etc.).
  * These are reported to the user instead of being retried.
  */
 export class UnprocessableFileError extends Error {
-    constructor(message: string) {
+    readonly code?: FailureCode;
+    readonly retryAt?: string;
+
+    constructor(message: string, details: { code?: FailureCode; retryAt?: string } = {}) {
         super(message);
         this.name = 'UnprocessableFileError';
+        this.code = details.code;
+        this.retryAt = details.retryAt;
     }
 }
 

@@ -9,7 +9,32 @@ const dynamoClient = new DynamoDBClient({});
 // Usage records expire a few days after the day they count
 const RECORD_TTL_SECONDS = 3 * 24 * 60 * 60;
 
-export type ReserveResult = 'reserved' | 'already-reserved' | 'limit-reached';
+export type ReserveResult =
+    | { status: 'reserved' }
+    | { status: 'already-reserved' }
+    | { status: 'limit-reached'; usedToday: number };
+
+/** Start of the next UTC day, when the daily allowance resets. */
+export function nextDailyReset(now = new Date()): Date {
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+}
+
+// Polly's neural voices speak at roughly 15 characters per second
+export const CHARACTERS_PER_MINUTE = 900;
+
+/** Approximate spoken length of `characters` of text, e.g. "about 1 hour 20 minutes". */
+export function describeAudioLength(characters: number): string {
+    const totalMinutes = Math.max(1, Math.round(characters / CHARACTERS_PER_MINUTE));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    const parts = [
+        hours > 0 ? `${hours} hour${hours === 1 ? '' : 's'}` : '',
+        minutes > 0 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : '',
+    ].filter(Boolean);
+
+    return `about ${parts.join(' ')}`;
+}
 
 /**
  * Atomically adds `characters` to today's (UTC) usage total, refusing if it
@@ -51,19 +76,21 @@ export async function reserveDailyCharacters(input: {
                             ':exp': { N: String(expiresAt) },
                             ':remaining': { N: String(dailyLimit - characters) },
                         },
+                        // Return today's total if blocked, to tell the user what's left
+                        ReturnValuesOnConditionCheckFailure: 'ALL_OLD',
                     },
                 },
             ],
         }));
-        return 'reserved';
+        return { status: 'reserved' };
     } catch (error) {
         if (error instanceof TransactionCanceledException) {
             const [fileMarker, dayTotal] = error.CancellationReasons ?? [];
             if (fileMarker?.Code === 'ConditionalCheckFailed') {
-                return 'already-reserved';
+                return { status: 'already-reserved' };
             }
             if (dayTotal?.Code === 'ConditionalCheckFailed') {
-                return 'limit-reached';
+                return { status: 'limit-reached', usedToday: Number(dayTotal.Item?.characters?.N ?? 0) };
             }
         }
         throw error;

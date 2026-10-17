@@ -15,7 +15,8 @@ const {
     FRONTEND_SUBDOMAIN,
     BACKEND_SUBDOMAIN,
     // Polly cost controls
-    DAILY_CHARACTER_LIMIT = '1000000',
+    // ~2 hours of audio a day (~15 characters per second) ≈ US$1.73
+    DAILY_CHARACTER_LIMIT = '108000',
     BUDGET_MONTHLY_USD = '10',
     BUDGET_ALERT_EMAIL,
 } = process.env;

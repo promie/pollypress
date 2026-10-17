@@ -5,9 +5,11 @@ import { ProgressBar } from './ProgressBar';
 import {
   AlertIcon,
   CheckIcon,
+  ClockIcon,
   DownloadIcon,
   FileIcon,
   RefreshIcon,
+  ScissorsIcon,
   SparkIcon,
   Spinner,
   UploadCloudIcon,
@@ -89,7 +91,7 @@ const Dropzone = ({ onSelectFile, onRejectFile }: Pick<ConverterViewProps, 'onSe
         or <span className="font-semibold text-indigo-600 dark:text-indigo-400">browse your files</span>
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-        {['PDF or TXT', `Up to ${MAX_FILE_SIZE_MB} MB`, 'Any number of pages'].map((chip) => (
+        {['PDF or TXT', `Up to ${MAX_FILE_SIZE_MB} MB`, 'Up to ~2 hours of audio a day'].map((chip) => (
           <span key={chip} className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">
             {chip}
           </span>
@@ -305,7 +307,88 @@ const DoneScreen = ({ state, onDownload, onReset }: Pick<ConverterViewProps, 'on
   );
 };
 
-const ErrorScreen = ({ state, onConvert, onReset }: Pick<ConverterViewProps, 'onConvert' | 'onReset'> & { state: ConverterState }) => (
+/** e.g. { day: "Tomorrow, Saturday 18 October", time: "11:00 am AEDT", relative: "in about 9 hours" } */
+const describeRetryTime = (iso: string, now = new Date()) => {
+  const at = new Date(iso);
+  const dayKey = (d: Date) => d.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+
+  const dateText = at.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  const prefix = dayKey(at) === dayKey(now) ? 'Today, ' : dayKey(at) === dayKey(tomorrow) ? 'Tomorrow, ' : '';
+  const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+
+  const minutes = Math.max(1, Math.round((at.getTime() - now.getTime()) / 60_000));
+  const relative =
+    minutes < 60
+      ? `in ${minutes} minute${minutes === 1 ? '' : 's'}`
+      : `in about ${Math.round(minutes / 60)} hour${Math.round(minutes / 60) === 1 ? '' : 's'}`;
+
+  return { day: `${prefix}${dateText}`, time, relative };
+};
+
+const LimitReachedScreen = ({ state, onReset }: Pick<ConverterViewProps, 'onReset'> & { state: ConverterState }) => {
+  const retry = state.retryAt ? describeRetryTime(state.retryAt) : null;
+
+  return (
+    <>
+      <div className="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-500/30">
+        <div className="flex gap-4">
+          <ClockIcon className="h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div>
+            <p className="font-semibold text-amber-900 dark:text-amber-100">Daily limit reached</p>
+            <p className="mt-1 text-sm text-amber-800 dark:text-amber-200/90">{state.error}</p>
+          </div>
+        </div>
+
+        {retry && (
+          <div className="mt-5 rounded-xl bg-white/80 p-4 text-center ring-1 ring-amber-200/80 dark:bg-slate-900/60 dark:ring-amber-500/20">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+              Available again
+            </p>
+            <p className="mt-1.5 text-lg font-bold text-slate-900 dark:text-white">{retry.day}</p>
+            <p className="text-slate-700 dark:text-slate-300">
+              at <span className="font-semibold">{retry.time}</span>
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{retry.relative} · shown in your local time</p>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 space-y-3">
+        <button type="button" onClick={onReset} className={primaryButton}>
+          Choose a shorter file
+        </button>
+      </div>
+    </>
+  );
+};
+
+const TooLongScreen = ({ state, onReset }: Pick<ConverterViewProps, 'onReset'> & { state: ConverterState }) => (
+  <>
+    <div className="flex gap-4 rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-500/30">
+      <ScissorsIcon className="h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
+      <div>
+        <p className="font-semibold text-amber-900 dark:text-amber-100">This document is too long</p>
+        <p className="mt-1 text-sm text-amber-800 dark:text-amber-200/90">{state.error}</p>
+        <p className="mt-3 text-sm text-amber-800 dark:text-amber-200/90">
+          Tip: split the PDF into parts of about 40 pages and convert them one per day.
+        </p>
+      </div>
+    </div>
+    <div className="mt-6">
+      <button type="button" onClick={onReset} className={primaryButton}>
+        Choose a different file
+      </button>
+    </div>
+  </>
+);
+
+const ErrorScreen = ({ state, onConvert, onReset }: Pick<ConverterViewProps, 'onConvert' | 'onReset'> & { state: ConverterState }) => {
+  if (state.errorCode === 'DAILY_LIMIT_REACHED') return <LimitReachedScreen state={state} onReset={onReset} />;
+  if (state.errorCode === 'DOCUMENT_TOO_LONG') return <TooLongScreen state={state} onReset={onReset} />;
+
+  return (
   <>
     <div className="flex gap-4 rounded-2xl bg-rose-50 p-5 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:ring-rose-500/30">
       <AlertIcon className="h-6 w-6 shrink-0 text-rose-600 dark:text-rose-400" />
@@ -326,7 +409,8 @@ const ErrorScreen = ({ state, onConvert, onReset }: Pick<ConverterViewProps, 'on
       </button>
     </div>
   </>
-);
+  );
+};
 
 /* ---------- View ---------- */
 

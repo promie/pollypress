@@ -37,6 +37,25 @@ export const previewStates: Record<string, ConverterState> = {
     audioUrl: 'data:audio/mpeg;base64,',
     downloadPercent: 47,
   },
+  'limit-reached': {
+    ...initialConverterState,
+    phase: 'error',
+    file: sampleFile('Quarterly Board Pack.pdf', 3_150_000),
+    error: "This document needs about 50 minutes of audio, but only about 20 minutes of today's 2 hours is left.",
+    errorCode: 'DAILY_LIMIT_REACHED',
+    // Next midnight UTC, like the backend
+    retryAt: (() => {
+      const now = new Date();
+      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
+    })(),
+  },
+  'too-long': {
+    ...initialConverterState,
+    phase: 'error',
+    file: report,
+    error: 'This document would be about 6 hours 30 minutes of audio, but the daily limit is about 2 hours. Try splitting it into smaller files.',
+    errorCode: 'DOCUMENT_TOO_LONG',
+  },
   error: {
     ...initialConverterState,
     phase: 'error',

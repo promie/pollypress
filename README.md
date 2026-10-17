@@ -83,7 +83,7 @@ the backend has limits. Set these in a `.env` file at the repo root (not committ
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `DAILY_CHARACTER_LIMIT` | `1000000` | Hard cap on characters converted per UTC day (~$16). Larger documents are rejected. |
+| `DAILY_CHARACTER_LIMIT` | `108000` | Hard cap on characters converted per UTC day: about 2 hours of audio (~$1.73). A document longer than this is rejected. |
 | `BUDGET_MONTHLY_USD` | `10` | Monthly Polly budget for email alerts at 50%, 80%, 100% and forecast overrun. |
 | `BUDGET_ALERT_EMAIL` | none | Where budget alerts are sent. No budget is created if unset. |
 

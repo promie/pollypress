@@ -76,6 +76,21 @@ export const LockIcon = (props: IconProps) => (
   </svg>
 );
 
+export const ClockIcon = (props: IconProps) => (
+  <svg {...base} {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 6v6l4 2" />
+  </svg>
+);
+
+export const ScissorsIcon = (props: IconProps) => (
+  <svg {...base} {...props}>
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="6" cy="18" r="3" />
+    <path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" />
+  </svg>
+);
+
 export const Spinner = ({ className = '' }: { className?: string }) => (
   <span
     className={`inline-block rounded-full border-2 border-current border-t-transparent animate-spin ${className}`}

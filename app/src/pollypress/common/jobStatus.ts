@@ -17,10 +17,16 @@ export const jobStatusSchema = z.discriminatedUnion('state', [
     z.object({
         state: z.literal('failed'),
         reason: z.string(),
+        // Lets the frontend show a tailored message for known failures
+        code: z.enum(['DAILY_LIMIT_REACHED', 'DOCUMENT_TOO_LONG']).optional(),
+        // When the file can be retried (ISO 8601, UTC)
+        retryAt: z.string().datetime().optional(),
     }),
 ]);
 
 export type JobStatus = z.infer<typeof jobStatusSchema>;
+
+export type FailureCode = NonNullable<Extract<JobStatus, { state: 'failed' }>['code']>;
 
 export const outputPrefix = (fileId: string): string => `output/${fileId}/`;
 
