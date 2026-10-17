@@ -6,25 +6,31 @@ import { pollForAudioFile, downloadAudioFile } from '../services/downloadService
 
 type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
+const MAX_FILE_SIZE_MB = 50;
+
 export const FileUpload = () => {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [pollingProgress, setPollingProgress] = useState<{ current: number; max: number } | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
-    // Handle rejected files (wrong type)
+    // Handle rejected files (wrong type or too large)
     if (rejectedFiles.length > 0) {
       const rejectedFile = rejectedFiles[0];
       const fileName = rejectedFile.file.name;
       const fileExtension = fileName.split('.').pop()?.toLowerCase() || 'unknown';
+      const isTooLarge = rejectedFile.errors.some((e) => e.code === 'file-too-large');
 
       setFile(null);
       setStatus('error');
       setErrorMessage(
-        `Sorry, "${fileName}" is not supported. Only .txt files are accepted. ` +
-        `You uploaded a .${fileExtension} file.`
+        isTooLarge
+          ? `Sorry, "${fileName}" is too large. The maximum file size is ${MAX_FILE_SIZE_MB} MB.`
+          : `Sorry, "${fileName}" is not supported. Only .txt and .pdf files are accepted. ` +
+            `You uploaded a .${fileExtension} file.`
       );
       setAudioUrl(null);
       setPollingProgress(null);
@@ -45,8 +51,10 @@ export const FileUpload = () => {
     onDrop,
     accept: {
       'text/plain': ['.txt'],
+      'application/pdf': ['.pdf'],
     },
     maxFiles: 1,
+    maxSize: MAX_FILE_SIZE_MB * 1024 * 1024,
   });
 
   const handleUpload = async () => {
@@ -64,9 +72,10 @@ export const FileUpload = () => {
       // Step 2: Poll for the processed audio file
       setStatus('processing');
 
+      // Long documents can take a few minutes to synthesize
       const downloadResult = await pollForAudioFile(uploadResult.fileKey, {
-        maxAttempts: 30,
-        intervalMs: 2000,
+        maxAttempts: 100,
+        intervalMs: 3000,
         onProgress: (attempt, max) => {
           setPollingProgress({ current: attempt, max });
         },
@@ -76,6 +85,7 @@ export const FileUpload = () => {
 
       // Step 3: Set the audio URL for playback
       setAudioUrl(downloadResult.downloadUrl);
+      setTruncated(Boolean(downloadResult.truncated));
       setStatus('success');
       setPollingProgress(null);
 
@@ -143,7 +153,7 @@ export const FileUpload = () => {
               <p className="text-xl text-gray-700">Drag & drop your file here</p>
               <p className="text-base text-gray-500">or click to browse</p>
             </div>
-            <p className="text-sm text-gray-400 mt-2">Supports .txt files only</p>
+            <p className="text-sm text-gray-400 mt-2">Supports .txt and .pdf files (up to {MAX_FILE_SIZE_MB} MB)</p>
           </div>
         )}
       </div>
@@ -182,6 +192,11 @@ export const FileUpload = () => {
             </svg>
             <p className="text-2xl font-semibold text-gray-900">Conversion complete!</p>
             <p className="text-gray-600">Your audio file is ready to play or download.</p>
+            {truncated && (
+              <p className="text-sm text-amber-700 text-center">
+                Your document was longer than 100,000 characters, so only the first part was converted.
+              </p>
+            )}
             {audioUrl && (
               <>
                 <audio controls src={audioUrl} className="w-full mt-4 rounded-lg">

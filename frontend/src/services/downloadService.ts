@@ -5,6 +5,7 @@ export type DownloadResponse = {
   downloadUrl: string;
   fileKey: string;
   expiresIn: number;
+  truncated?: boolean;
 };
 
 export type DownloadError = {
@@ -33,7 +34,7 @@ export async function requestDownloadUrl(fileKey: string): Promise<DownloadRespo
       throw new Error('FILE_NOT_READY');
     }
 
-    throw new Error(error.error || 'Failed to get download URL');
+    throw new Error(error.message || error.error || 'Failed to get download URL');
   }
 
   return response.json();
