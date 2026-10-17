@@ -3,6 +3,7 @@ import { buildConfig } from '../../../common/zod/buildConfig';
 
 const config = z.object({
     OUTPUT_BUCKET: z.string().min(1),
+    PROCESSING_QUEUE_URL: z.string().url(),
 });
 
 export type Config = z.infer<typeof config>;

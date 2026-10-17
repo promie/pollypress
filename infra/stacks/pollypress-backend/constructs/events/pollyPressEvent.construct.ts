@@ -35,7 +35,8 @@ export class PollyPressEventConstruct extends Construct {
 
         const processingQueue = new sqs.Queue(this, 'PollyPressEventQueue', {
             queueName: `${stackName}-PollyPress-Event-Queue`,
-            visibilityTimeout: Duration.seconds(330),
+            // Must exceed the processor's 15 minute timeout
+            visibilityTimeout: Duration.minutes(16),
             retentionPeriod: Duration.days(4),
             deadLetterQueue: {
                 queue: deadLetterQueue,
@@ -62,23 +63,26 @@ export class PollyPressEventConstruct extends Construct {
             appName,
             entry: 'app/src/pollypress/events/pollyEventProcessor/processor/pollyEventProcessor.event.ts',
             handler: 'handler',
-            // Extra memory for parsing large PDFs
-            memorySize: 1024,
-            timeout: Duration.minutes(5),
+            // Extra memory (and CPU) for parsing large PDFs
+            memorySize: 2048,
+            // Long documents hand off to a new invocation before this is reached
+            timeout: Duration.minutes(15),
             environment: {
                 OUTPUT_BUCKET: outputBucket.bucketName,
+                PROCESSING_QUEUE_URL: processingQueue.queueUrl,
             } satisfies ProcessorConfig,
         });
 
         inputBucket.grantRead(this.processorLambda);
-        // Polly async tasks write the audio to S3 using the caller's permissions
-        outputBucket.grantWrite(this.processorLambda);
+        // Reads back the extracted text on continuation runs
+        outputBucket.grantReadWrite(this.processorLambda);
+        // Queues continuation messages for long documents
+        processingQueue.grantSendMessages(this.processorLambda);
 
         this.processorLambda.addToRolePolicy(
             new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
                 actions: [
-                    'polly:StartSpeechSynthesisTask',
                     'polly:SynthesizeSpeech',
                     'polly:DescribeVoices',
                 ],

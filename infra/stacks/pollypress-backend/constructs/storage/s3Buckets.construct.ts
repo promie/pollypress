@@ -62,7 +62,13 @@ export class S3BucketsConstruct extends Construct {
                 {
                     id: 'DeleteOldOutputFiles',
                     enabled: true,
-                    expiration: Duration.days(30), 
+                    expiration: Duration.days(30),
+                },
+                {
+                    // Clean up audio uploads abandoned by failed or retried runs
+                    id: 'AbortIncompleteAudioUploads',
+                    enabled: true,
+                    abortIncompleteMultipartUploadAfter: Duration.days(1),
                 },
             ],
         });

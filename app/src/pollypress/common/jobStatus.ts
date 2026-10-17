@@ -6,10 +6,13 @@ import { z } from 'zod';
  */
 export const jobStatusSchema = z.discriminatedUnion('state', [
     z.object({
-        state: z.literal('synthesizing'),
-        taskId: z.string().min(1),
-        textLength: z.number().int().nonnegative(),
-        truncated: z.boolean(),
+        state: z.literal('processing'),
+        completedChunks: z.number().int().nonnegative(),
+        totalChunks: z.number().int().positive(),
+    }),
+    z.object({
+        state: z.literal('completed'),
+        audioKey: z.string().min(1),
     }),
     z.object({
         state: z.literal('failed'),
@@ -23,5 +26,7 @@ export const outputPrefix = (fileId: string): string => `output/${fileId}/`;
 
 export const statusKey = (fileId: string): string => `${outputPrefix(fileId)}status.json`;
 
-// Polly async tasks write their audio to `<OutputS3KeyPrefix><TaskId>.<format>`
-export const audioKey = (fileId: string, taskId: string): string => `${outputPrefix(fileId)}${taskId}.mp3`;
+// Extracted text, saved once so continuation runs don't re-parse the PDF
+export const textKey = (fileId: string): string => `${outputPrefix(fileId)}text.txt`;
+
+export const audioKey = (fileId: string): string => `${outputPrefix(fileId)}audio.mp3`;

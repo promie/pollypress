@@ -45,20 +45,8 @@ export async function extractText(fileContent: Buffer, fileKey: string): Promise
 }
 
 /**
- * Collapses whitespace (PDF extraction leaves lots of line breaks) and trims
- * the text to `maxLength`, cutting at the last word boundary where possible.
+ * Collapses whitespace (PDF extraction leaves lots of line breaks).
  */
-export function prepareText(text: string, maxLength: number): { text: string; truncated: boolean } {
-    const normalized = text.replace(/\s+/g, ' ').trim();
-
-    if (normalized.length <= maxLength) {
-        return { text: normalized, truncated: false };
-    }
-
-    const cut = normalized.slice(0, maxLength);
-    const lastSpace = cut.lastIndexOf(' ');
-    return {
-        text: lastSpace > maxLength * 0.9 ? cut.slice(0, lastSpace) : cut,
-        truncated: true,
-    };
+export function normalizeText(text: string): string {
+    return text.replace(/\s+/g, ' ').trim();
 }

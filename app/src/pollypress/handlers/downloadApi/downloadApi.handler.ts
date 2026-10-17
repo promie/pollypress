@@ -58,14 +58,18 @@ export const handler: APIGatewayProxyHandler = async (event, context: Context): 
 
         const jobStatus = await getJobStatus({ fileId, bucketName: OUTPUT_BUCKET });
 
-        if (jobStatus.state === 'pending') {
-            logger.info('File not ready yet', { fileKey });
+        if (jobStatus.state === 'pending' || jobStatus.state === 'processing') {
+            const progress = jobStatus.state === 'processing'
+                ? { completedChunks: jobStatus.completedChunks, totalChunks: jobStatus.totalChunks }
+                : undefined;
+            logger.info('File not ready yet', { fileKey, progress });
             return {
                 statusCode: 404,
                 headers,
                 body: JSON.stringify({
                     error: 'File not ready',
-                    message: 'The audio file is still being processed. Please try again in a few moments.'
+                    message: 'The audio file is still being processed. Please try again in a few moments.',
+                    progress,
                 }),
             };
         }
@@ -96,7 +100,7 @@ export const handler: APIGatewayProxyHandler = async (event, context: Context): 
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ ...result, truncated: jobStatus.truncated }),
+            body: JSON.stringify(result),
         };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

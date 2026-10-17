@@ -3,7 +3,6 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { StandardLambda } from '../../../../common/StandardLambda';
 import { StandardRestApi } from '../../../../common/StandardRestApi';
@@ -56,14 +55,6 @@ export class UploadApiConstruct extends Construct {
         });
 
         outputBucket.grantRead(this.downloadHandler);
-
-        this.downloadHandler.addToRolePolicy(
-            new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: ['polly:GetSpeechSynthesisTask'],
-                resources: ['*'],
-            })
-        );
 
         const restApi = new StandardRestApi(this, 'RestApi', {
             appName,
