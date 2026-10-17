@@ -1,4 +1,5 @@
-import { Duration } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
@@ -15,6 +16,8 @@ export type PollyPressEventConstructProps = {
     stage: string;
     inputBucket: s3.Bucket;
     outputBucket: s3.Bucket;
+    // Max characters sent to Polly per UTC day (Polly bills per character)
+    dailyCharacterLimit: number;
 };
 
 export class PollyPressEventConstruct extends Construct {
@@ -25,7 +28,7 @@ export class PollyPressEventConstruct extends Construct {
     constructor(scope: Construct, id: string, props: PollyPressEventConstructProps) {
         super(scope, id);
 
-        const { appName, stage, inputBucket, outputBucket } = props;
+        const { appName, stage, inputBucket, outputBucket, dailyCharacterLimit } = props;
         const stackName = `${appName}-${stage}`;
 
         const deadLetterQueue = new sqs.Queue(this, 'PollyPressEventDLQ', {
@@ -45,6 +48,15 @@ export class PollyPressEventConstruct extends Construct {
         });
 
         this.processingQueue = processingQueue;
+
+        // Tracks characters converted per day to enforce the daily spend cap
+        const usageTable = new dynamodb.Table(this, 'UsageTable', {
+            tableName: `${stackName}-PollyPress-Usage`,
+            partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+            billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+            timeToLiveAttribute: 'expiresAt',
+            removalPolicy: RemovalPolicy.DESTROY,
+        });
 
         this.receiverLambda = new StandardLambda(this, 'PollyPressEventReceiver', {
             appName,
@@ -70,7 +82,9 @@ export class PollyPressEventConstruct extends Construct {
             environment: {
                 OUTPUT_BUCKET: outputBucket.bucketName,
                 PROCESSING_QUEUE_URL: processingQueue.queueUrl,
-            } satisfies ProcessorConfig,
+                USAGE_TABLE: usageTable.tableName,
+                DAILY_CHARACTER_LIMIT: String(dailyCharacterLimit),
+            } satisfies Record<keyof ProcessorConfig, string>,
         });
 
         inputBucket.grantRead(this.processorLambda);
@@ -78,6 +92,7 @@ export class PollyPressEventConstruct extends Construct {
         outputBucket.grantReadWrite(this.processorLambda);
         // Queues continuation messages for long documents
         processingQueue.grantSendMessages(this.processorLambda);
+        usageTable.grantReadWriteData(this.processorLambda);
 
         this.processorLambda.addToRolePolicy(
             new iam.PolicyStatement({

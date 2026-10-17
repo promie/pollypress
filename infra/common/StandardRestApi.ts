@@ -18,6 +18,11 @@ export type StandardRestApiProps = {
     loggingLevel?: apigateway.MethodLoggingLevel;
     dataTraceEnabled?: boolean;
     metricsEnabled?: boolean;
+    // Stage-wide request limits (shared by all callers)
+    throttlingRateLimit?: number;
+    throttlingBurstLimit?: number;
+    // Per-method overrides, keyed like '/upload/POST'
+    methodOptions?: Record<string, apigateway.MethodDeploymentOptions>;
 };
 
 export class StandardRestApi extends Construct {
@@ -41,6 +46,9 @@ export class StandardRestApi extends Construct {
             loggingLevel = apigateway.MethodLoggingLevel.INFO,
             dataTraceEnabled = true,
             metricsEnabled = true,
+            throttlingRateLimit,
+            throttlingBurstLimit,
+            methodOptions,
         } = props;
 
         const cloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
@@ -63,6 +71,9 @@ export class StandardRestApi extends Construct {
                 loggingLevel,
                 dataTraceEnabled,
                 metricsEnabled,
+                throttlingRateLimit,
+                throttlingBurstLimit,
+                methodOptions,
             },
             defaultCorsPreflightOptions: {
                 allowOrigins: corsAllowOrigins,

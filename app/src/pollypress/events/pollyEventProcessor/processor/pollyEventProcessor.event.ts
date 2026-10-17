@@ -21,6 +21,7 @@ import {
 } from '../receiver/queueMessageSchema';
 import { streamToBuffer, extractText, normalizeText, UnprocessableFileError } from '../utils/fileUtils';
 import { splitIntoChunks, mapWithConcurrency } from '../utils/textChunker';
+import { reserveDailyCharacters } from '../utils/dailyUsage';
 
 const logger = createLogger('polly-event-processor');
 const s3Client = new S3Client({});
@@ -216,6 +217,28 @@ const startProcessing = async (message: QueueMessage, fileId: string, context: C
     if (text.length === 0) {
         throw new UnprocessableFileError(
             'No readable text found in the file. Scanned or image-only PDFs are not supported.'
+        );
+    }
+
+    // Hard ceiling on Polly spend: Polly bills per character
+    if (text.length > config.DAILY_CHARACTER_LIMIT) {
+        throw new UnprocessableFileError(
+            `This document has ${text.length.toLocaleString('en-US')} characters, which is more than the ` +
+            `${config.DAILY_CHARACTER_LIMIT.toLocaleString('en-US')} that can be converted in one day.`
+        );
+    }
+
+    const reservation = await reserveDailyCharacters({
+        tableName: config.USAGE_TABLE,
+        fileId,
+        characters: text.length,
+        dailyLimit: config.DAILY_CHARACTER_LIMIT,
+    });
+    logger.info('Daily character reservation', { fileId, characters: text.length, reservation });
+
+    if (reservation === 'limit-reached') {
+        throw new UnprocessableFileError(
+            'The daily conversion limit has been reached. Please try again tomorrow (the limit resets at midnight UTC).'
         );
     }
 

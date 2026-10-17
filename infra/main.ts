@@ -14,6 +14,10 @@ const {
     DOMAIN_NAME,
     FRONTEND_SUBDOMAIN,
     BACKEND_SUBDOMAIN,
+    // Polly cost controls
+    DAILY_CHARACTER_LIMIT = '1000000',
+    BUDGET_MONTHLY_USD = '10',
+    BUDGET_ALERT_EMAIL,
 } = process.env;
 
 const baseProps: StackProps = {
@@ -63,6 +67,9 @@ const backendStack = new PollyPressBackendStack(app, `${APP_NAME}BackendStack`, 
     domainName: DOMAIN_NAME,
     subdomain: BACKEND_SUBDOMAIN,
     certificate: backendCertificateStack?.certificate,
+    dailyCharacterLimit: Number(DAILY_CHARACTER_LIMIT),
+    budgetMonthlyUsd: Number(BUDGET_MONTHLY_USD),
+    budgetAlertEmail: BUDGET_ALERT_EMAIL,
 });
 
 new PollyPressFrontendStack(app, `${APP_NAME}FrontendStack`, {

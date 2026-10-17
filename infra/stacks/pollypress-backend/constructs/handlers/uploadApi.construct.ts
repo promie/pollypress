@@ -62,6 +62,13 @@ export class UploadApiConstruct extends Construct {
             domainName,
             subdomain,
             certificate,
+            // Site-wide limits to slow down abuse; the daily character cap is the hard ceiling
+            throttlingRateLimit: 20,
+            throttlingBurstLimit: 40,
+            methodOptions: {
+                // Each upload triggers paid Polly work
+                '/upload/POST': { throttlingRateLimit: 1, throttlingBurstLimit: 3 },
+            },
         });
 
         this.api = restApi.api;
