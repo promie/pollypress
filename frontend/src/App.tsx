@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { Converter } from './components/Converter'
-import { WaveIcon } from './components/icons'
+import { PasscodeGate } from './components/PasscodeGate'
+import { LockIcon, WaveIcon } from './components/icons'
+import { clearPasscode, getPasscode } from './services/authService'
 
-export const Layout = ({ children }: { children: ReactNode }) => (
+export const Layout = ({ children, onLock }: { children: ReactNode; onLock?: () => void }) => (
   <div className="relative min-h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
     {/* Soft background glow */}
     <div aria-hidden className="pointer-events-none absolute inset-0">
@@ -22,6 +24,17 @@ export const Layout = ({ children }: { children: ReactNode }) => (
 
       {children}
 
+      {onLock && (
+        <button
+          type="button"
+          onClick={onLock}
+          className="mx-auto mt-6 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-200/60 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+        >
+          <LockIcon className="h-4 w-4" />
+          Lock on this device
+        </button>
+      )}
+
       <footer className="mt-auto pt-10 text-center text-xs text-slate-400 dark:text-slate-500">
         Powered by Amazon Polly · Neural voice “Joanna” · Files are deleted automatically
       </footer>
@@ -30,9 +43,32 @@ export const Layout = ({ children }: { children: ReactNode }) => (
 )
 
 function App() {
+  const [unlocked, setUnlocked] = useState(() => getPasscode() !== null)
+  const [gateMessage, setGateMessage] = useState<string | null>(null)
+
+  const lock = useCallback((message: string | null = null) => {
+    clearPasscode()
+    setGateMessage(message)
+    setUnlocked(false)
+  }, [])
+
+  // A saved passcode stops working if the owner changes it
+  const handleUnauthorized = useCallback(
+    () => lock('The passcode has changed. Please enter the new one.'),
+    [lock]
+  )
+
+  if (!unlocked) {
+    return (
+      <Layout>
+        <PasscodeGate initialMessage={gateMessage} onUnlocked={() => setUnlocked(true)} />
+      </Layout>
+    )
+  }
+
   return (
-    <Layout>
-      <Converter />
+    <Layout onLock={() => lock()}>
+      <Converter onUnauthorized={handleUnauthorized} />
     </Layout>
   )
 }

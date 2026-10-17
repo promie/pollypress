@@ -1,3 +1,5 @@
+import { authHeaders, isUnauthorized, UnauthorizedError } from './authService';
+
 // Get API URL from environment variable
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.pollypress.pyutasane.com';
 
@@ -40,8 +42,13 @@ export async function requestDownloadUrl(fileKey: string): Promise<DownloadRespo
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders(),
     },
   });
+
+  if (isUnauthorized(response)) {
+    throw new UnauthorizedError();
+  }
 
   if (!response.ok) {
     const error = await response.json() as DownloadError;

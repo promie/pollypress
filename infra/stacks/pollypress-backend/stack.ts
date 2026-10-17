@@ -84,6 +84,11 @@ export class PollyPressBackendStack extends Stack {
             description: 'Output S3 Bucket',
         });
 
+        new CfnOutput(this, 'PasscodeSecretName', {
+            value: api.passcodeSecret.secretName,
+            description: 'Secrets Manager secret holding the web app passcode',
+        });
+
         if (domainName && subdomain) {
             new CfnOutput(this, 'CustomDomain', {
                 value: `${subdomain}.${domainName}`,

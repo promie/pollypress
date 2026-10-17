@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { uploadFile } from '../services/uploadService';
 import { pollForAudioFile, downloadAudioFile } from '../services/downloadService';
 import type { ProcessingProgress } from '../services/downloadService';
+import { UnauthorizedError } from '../services/authService';
 
 export type Phase = 'idle' | 'ready' | 'uploading' | 'converting' | 'done' | 'error';
 
@@ -33,7 +34,7 @@ export const audioFileName = (file: File): string => `${file.name.replace(/\.[^.
 /**
  * Drives the upload → convert → download flow and exposes its state for the view.
  */
-export function useConverter() {
+export function useConverter({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [state, setState] = useState<ConverterState>(initialConverterState);
   // First progress sample, used to estimate time remaining from the observed rate
   const firstSample = useRef<{ at: number; completed: number } | null>(null);
@@ -85,12 +86,16 @@ export function useConverter() {
         etaSeconds: null,
       }));
     } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        onUnauthorized();
+        return;
+      }
       update({
         phase: 'error',
         error: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
       });
     }
-  }, [state]);
+  }, [state, onUnauthorized]);
 
   const download = useCallback(async () => {
     const { audioUrl, file } = state;

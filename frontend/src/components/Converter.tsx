@@ -1,8 +1,8 @@
 import { useConverter } from '../hooks/useConverter';
 import { ConverterView } from './ConverterView';
 
-export const Converter = () => {
-  const { state, selectFile, rejectFile, convert, download, reset } = useConverter();
+export const Converter = ({ onUnauthorized }: { onUnauthorized: () => void }) => {
+  const { state, selectFile, rejectFile, convert, download, reset } = useConverter({ onUnauthorized });
 
   return (
     <ConverterView

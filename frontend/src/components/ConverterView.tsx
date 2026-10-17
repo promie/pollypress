@@ -39,7 +39,7 @@ const formatEta = (seconds: number): string => {
 
 const percentOf = (completed: number, total: number): number => Math.floor((completed / total) * 100);
 
-const primaryButton =
+export const primaryButton =
   'inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:-translate-y-0.5 hover:shadow-indigo-600/40 active:translate-y-0 disabled:pointer-events-none disabled:opacity-70 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/30';
 
 const secondaryButton =

@@ -1,3 +1,5 @@
+import { authHeaders, isUnauthorized, UnauthorizedError } from './authService';
+
 // Get API URL from environment variable
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.pollypress.pyutasane.com';
 
@@ -25,12 +27,17 @@ export async function requestPresignedUrl(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders(),
     },
     body: JSON.stringify({
       fileName,
       fileType,
     }),
   });
+
+  if (isUnauthorized(response)) {
+    throw new UnauthorizedError();
+  }
 
   if (!response.ok) {
     const error = await response.json();

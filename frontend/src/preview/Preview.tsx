@@ -1,5 +1,6 @@
 import { Layout } from '../App';
 import { ConverterView } from '../components/ConverterView';
+import { PasscodeGate } from '../components/PasscodeGate';
 import { initialConverterState, type ConverterState } from '../hooks/useConverter';
 
 /**
@@ -46,15 +47,30 @@ export const previewStates: Record<string, ConverterState> = {
 
 const noop = () => {};
 
+const gatePreviews: Record<string, { message?: string; checking?: boolean }> = {
+  locked: {},
+  'locked-error': { message: "That passcode isn't right. Please check it and try again." },
+  'locked-checking': { checking: true },
+};
+
 export const Preview = ({ name }: { name: string }) => {
   const state = previewStates[name];
+  const gate = gatePreviews[name];
+
+  if (gate) {
+    return (
+      <Layout>
+        <PasscodeGate onUnlocked={noop} initialMessage={gate.message} initialChecking={gate.checking} />
+      </Layout>
+    );
+  }
 
   if (!state) {
     return (
       <div className="p-8 font-sans">
         <p className="mb-4">Unknown preview. Try one of:</p>
         <ul className="list-disc pl-6">
-          {Object.keys(previewStates).map((key) => (
+          {[...Object.keys(previewStates), ...Object.keys(gatePreviews)].map((key) => (
             <li key={key}>
               <a className="text-indigo-600 underline" href={`?preview=${key}`}>{key}</a>
             </li>
@@ -65,7 +81,7 @@ export const Preview = ({ name }: { name: string }) => {
   }
 
   return (
-    <Layout>
+    <Layout onLock={noop}>
       <ConverterView
         state={state}
         onSelectFile={noop}
