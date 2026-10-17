@@ -5,20 +5,37 @@ export type DownloadResponse = {
   downloadUrl: string;
   fileKey: string;
   expiresIn: number;
-  truncated?: boolean;
+};
+
+export type ProcessingProgress = {
+  completedChunks: number;
+  totalChunks: number;
 };
 
 export type DownloadError = {
   error: string;
   message?: string;
+  progress?: ProcessingProgress;
 };
+
+/**
+ * Thrown while the audio is still being generated. Carries progress once the
+ * processor has started synthesizing.
+ */
+export class FileNotReadyError extends Error {
+  readonly progress?: ProcessingProgress;
+
+  constructor(progress?: ProcessingProgress) {
+    super('FILE_NOT_READY');
+    this.name = 'FileNotReadyError';
+    this.progress = progress;
+  }
+}
 
 /**
  * Request a presigned URL from the API to download the processed audio file
  */
 export async function requestDownloadUrl(fileKey: string): Promise<DownloadResponse> {
-  console.log('Requesting download URL from API for:', fileKey);
-
   const response = await fetch(`${API_URL}/download?fileKey=${encodeURIComponent(fileKey)}`, {
     method: 'GET',
     headers: {
@@ -31,7 +48,7 @@ export async function requestDownloadUrl(fileKey: string): Promise<DownloadRespo
 
     // If file not ready (404), throw specific error
     if (response.status === 404) {
-      throw new Error('FILE_NOT_READY');
+      throw new FileNotReadyError(error.progress);
     }
 
     throw new Error(error.message || error.error || 'Failed to get download URL');
@@ -41,62 +58,53 @@ export async function requestDownloadUrl(fileKey: string): Promise<DownloadRespo
 }
 
 /**
- * Poll for the processed audio file to be ready
- * Returns the download URL when ready, or throws after max attempts
+ * Poll for the processed audio file to be ready.
+ * Long documents can take a while, so polling only gives up if progress
+ * stalls for `stallTimeoutMs` rather than after a fixed total time.
  */
 export async function pollForAudioFile(
   fileKey: string,
   options: {
-    maxAttempts?: number;
     intervalMs?: number;
-    onProgress?: (attempt: number, maxAttempts: number) => void;
+    stallTimeoutMs?: number;
+    onProgress?: (progress?: ProcessingProgress) => void;
   } = {}
 ): Promise<DownloadResponse> {
   const {
-    maxAttempts = 30, // Poll for up to 30 attempts
-    intervalMs = 2000, // Check every 2 seconds
+    intervalMs = 2000,
+    stallTimeoutMs = 5 * 60 * 1000,
     onProgress,
   } = options;
 
   console.log(`Starting to poll for audio file: ${fileKey}`);
-  console.log(`Will check every ${intervalMs}ms for up to ${maxAttempts} attempts`);
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  let lastCompleted = -1;
+  let lastProgressAt = Date.now();
+
+  for (;;) {
     try {
-      console.log(`Polling attempt ${attempt}/${maxAttempts}...`);
-
-      // Notify progress
-      if (onProgress) {
-        onProgress(attempt, maxAttempts);
-      }
-
-      // Try to get the download URL
       const response = await requestDownloadUrl(fileKey);
-
       console.log('✅ Audio file is ready!');
       return response;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      // If file not ready, wait and try again
-      if (errorMessage === 'FILE_NOT_READY') {
-        if (attempt < maxAttempts) {
-          console.log(`File not ready yet, waiting ${intervalMs}ms before next attempt...`);
-          await new Promise(resolve => setTimeout(resolve, intervalMs));
-          continue;
-        } else {
-          console.error('Max polling attempts reached');
-          throw new Error('Audio processing is taking longer than expected. Please try again later.');
-        }
+      if (!(error instanceof FileNotReadyError)) {
+        console.error('Error polling for audio file:', error);
+        throw error;
       }
 
-      // For other errors, throw immediately
-      console.error('Error polling for audio file:', errorMessage);
-      throw error;
+      onProgress?.(error.progress);
+
+      const completed = error.progress?.completedChunks ?? -1;
+      if (completed > lastCompleted) {
+        lastCompleted = completed;
+        lastProgressAt = Date.now();
+      } else if (Date.now() - lastProgressAt > stallTimeoutMs) {
+        throw new Error('Audio processing is taking longer than expected. Please try again later.');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
   }
-
-  throw new Error('Audio processing is taking longer than expected. Please try again later.');
 }
 
 /**

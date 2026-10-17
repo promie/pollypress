@@ -3,18 +3,21 @@ import { useDropzone } from 'react-dropzone';
 import type { FileRejection } from 'react-dropzone';
 import { uploadFile } from '../services/uploadService';
 import { pollForAudioFile, downloadAudioFile } from '../services/downloadService';
+import type { ProcessingProgress } from '../services/downloadService';
 
 type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
-const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE_MB = 200;
+
+const progressPercent = ({ completedChunks, totalChunks }: ProcessingProgress): number =>
+  Math.floor((completedChunks / totalChunks) * 100);
 
 export const FileUpload = () => {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [truncated, setTruncated] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [pollingProgress, setPollingProgress] = useState<{ current: number; max: number } | null>(null);
+  const [pollingProgress, setPollingProgress] = useState<ProcessingProgress | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
     // Handle rejected files (wrong type or too large)
@@ -74,10 +77,9 @@ export const FileUpload = () => {
 
       // Long documents can take a few minutes to synthesize
       const downloadResult = await pollForAudioFile(uploadResult.fileKey, {
-        maxAttempts: 100,
-        intervalMs: 3000,
-        onProgress: (attempt, max) => {
-          setPollingProgress({ current: attempt, max });
+        intervalMs: 2000,
+        onProgress: (progress) => {
+          setPollingProgress(progress ?? null);
         },
       });
 
@@ -85,7 +87,6 @@ export const FileUpload = () => {
 
       // Step 3: Set the audio URL for playback
       setAudioUrl(downloadResult.downloadUrl);
-      setTruncated(Boolean(downloadResult.truncated));
       setStatus('success');
       setPollingProgress(null);
 
@@ -175,10 +176,21 @@ export const FileUpload = () => {
           <p className="text-lg text-gray-700">
             {status === 'uploading' ? 'Uploading your document...' : 'Converting to speech...'}
           </p>
-          {pollingProgress && (
-            <p className="text-sm text-gray-500">
-              Checking for processed file... (attempt {pollingProgress.current} of {pollingProgress.max})
-            </p>
+          {status === 'processing' && pollingProgress && (
+            <div className="w-full max-w-md flex flex-col items-center gap-2">
+              <div className="w-full h-2 rounded-full bg-blue-100 overflow-hidden">
+                <div
+                  className="h-full bg-blue-800 transition-all duration-500"
+                  style={{ width: `${progressPercent(pollingProgress)}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-500">
+                {progressPercent(pollingProgress)}% ({pollingProgress.completedChunks} of {pollingProgress.totalChunks} sections)
+              </p>
+            </div>
+          )}
+          {status === 'processing' && !pollingProgress && (
+            <p className="text-sm text-gray-500">Reading your document...</p>
           )}
         </div>
       )}
@@ -192,11 +204,6 @@ export const FileUpload = () => {
             </svg>
             <p className="text-2xl font-semibold text-gray-900">Conversion complete!</p>
             <p className="text-gray-600">Your audio file is ready to play or download.</p>
-            {truncated && (
-              <p className="text-sm text-amber-700 text-center">
-                Your document was longer than 100,000 characters, so only the first part was converted.
-              </p>
-            )}
             {audioUrl && (
               <>
                 <audio controls src={audioUrl} className="w-full mt-4 rounded-lg">
