@@ -41,43 +41,46 @@ export async function requestPresignedUrl(
 }
 
 /**
- * Upload a file directly to S3 using a presigned URL
+ * Upload a file directly to S3 using a presigned URL.
+ * Uses XMLHttpRequest because fetch can't report upload progress.
  */
-export async function uploadToS3(
+export function uploadToS3(
   file: File,
-  presignedUrl: string
+  presignedUrl: string,
+  onProgress?: (percent: number) => void
 ): Promise<void> {
-  console.log('Uploading file to S3...');
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', presignedUrl);
+    xhr.setRequestHeader('Content-Type', file.type);
 
-  const response = await fetch(presignedUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': file.type,
-    },
-    body: file,
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve();
+      } else {
+        reject(new Error(`Failed to upload file: ${xhr.statusText || xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error while uploading the file'));
+
+    xhr.send(file);
   });
-
-  if (!response.ok) {
-    throw new Error(`Failed to upload file to S3: ${response.statusText}`);
-  }
-
-  console.log('✅ File uploaded successfully to S3!');
 }
 
 /**
  * Complete upload flow: request presigned URL and upload to S3
  */
-export async function uploadFile(file: File): Promise<UploadResponse> {
-  // Step 1: Get presigned URL from API
+export async function uploadFile(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<UploadResponse> {
   const uploadData = await requestPresignedUrl(file.name, file.type);
-
-  console.log('File will be stored at:', uploadData.fileKey);
-
-  // Step 2: Upload file directly to S3 using presigned URL
-  await uploadToS3(file, uploadData.uploadUrl);
-
-  console.log('File ID:', uploadData.fileId);
-  console.log('S3 Key:', uploadData.fileKey);
-
+  await uploadToS3(file, uploadData.uploadUrl, onProgress);
   return uploadData;
 }

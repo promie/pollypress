@@ -108,18 +108,41 @@ export async function pollForAudioFile(
 }
 
 /**
- * Download the audio file using the presigned URL
+ * Download the audio file and save it with `fileName`, reporting progress.
+ * The file is fetched into a blob first because browsers ignore the
+ * `download` attribute on cross-origin links like presigned S3 URLs.
+ * `onProgress` receives null when the size is unknown.
  */
-export function downloadAudioFile(downloadUrl: string, fileName: string): void {
-  console.log('Starting download...');
+export async function downloadAudioFile(
+  downloadUrl: string,
+  fileName: string,
+  onProgress?: (percent: number | null) => void
+): Promise<void> {
+  const response = await fetch(downloadUrl);
+  if (!response.ok || !response.body) {
+    throw new Error('Failed to download the audio file');
+  }
 
-  // Create a temporary anchor element to trigger download
+  const total = Number(response.headers.get('Content-Length')) || 0;
+  const reader = response.body.getReader();
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  let received = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    onProgress?.(total ? Math.round((received / total) * 100) : null);
+  }
+
+  const blobUrl = URL.createObjectURL(new Blob(chunks, { type: 'audio/mpeg' }));
   const link = document.createElement('a');
-  link.href = downloadUrl;
+  link.href = blobUrl;
   link.download = fileName;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-
-  console.log('✅ Download started!');
+  // Give the browser a moment to start the save before freeing the blob
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
 }
