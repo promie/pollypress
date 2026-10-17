@@ -62,7 +62,8 @@ export class PollyPressEventConstruct extends Construct {
             appName,
             entry: 'app/src/pollypress/events/pollyEventProcessor/processor/pollyEventProcessor.event.ts',
             handler: 'handler',
-            memorySize: 512,
+            // Extra memory for parsing large PDFs
+            memorySize: 1024,
             timeout: Duration.minutes(5),
             environment: {
                 OUTPUT_BUCKET: outputBucket.bucketName,
@@ -70,12 +71,14 @@ export class PollyPressEventConstruct extends Construct {
         });
 
         inputBucket.grantRead(this.processorLambda);
+        // Polly async tasks write the audio to S3 using the caller's permissions
         outputBucket.grantWrite(this.processorLambda);
 
         this.processorLambda.addToRolePolicy(
             new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
                 actions: [
+                    'polly:StartSpeechSynthesisTask',
                     'polly:SynthesizeSpeech',
                     'polly:DescribeVoices',
                 ],

@@ -2,6 +2,7 @@ import { APIGatewayProxyHandler, APIGatewayProxyResult, Context } from 'aws-lamb
 import { createLogger } from '../../common/logger';
 import { getCorsHeaders, createCorsPreflightResponse } from '../../common/cors/cors';
 import { generatePresignedDownloadUrl } from './commands/generatePresignedDownloadUrl.command';
+import { getJobStatus } from './commands/getJobStatus.command';
 import { initConfig } from './config';
 import { querySchema } from './querySchema';
 
@@ -52,34 +53,13 @@ export const handler: APIGatewayProxyHandler = async (event, context: Context): 
 
         const { fileKey } = validationResult.data;
 
-        // Convert input file key to output file key
-        // Example: input/abc-123.txt → output/abc-123.mp3
-        const outputFileKey = fileKey
-            .replace(/^input\//, 'output/')  // Replace 'input/' prefix with 'output/'
-            .replace(/\.[^.]+$/, '.mp3');     // Replace extension with .mp3
+        // Example: input/abc-123.pdf → abc-123
+        const fileId = fileKey.replace(/^input\//, '').replace(/\.[^.]+$/, '');
 
-        logger.info('Generating download URL for processed file', {
-            inputKey: fileKey,
-            outputKey: outputFileKey
-        });
+        const jobStatus = await getJobStatus({ fileId, bucketName: OUTPUT_BUCKET });
 
-        // Generate presigned URL for download
-        const result = await generatePresignedDownloadUrl({
-            fileKey: outputFileKey,
-            bucketName: OUTPUT_BUCKET,
-        });
-
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify(result),
-        };
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-        // Check if it's a "file not found" error
-        if (errorMessage.includes('not found')) {
-            logger.info('File not ready yet', { error: errorMessage });
+        if (jobStatus.state === 'pending') {
+            logger.info('File not ready yet', { fileKey });
             return {
                 statusCode: 404,
                 headers,
@@ -89,6 +69,37 @@ export const handler: APIGatewayProxyHandler = async (event, context: Context): 
                 }),
             };
         }
+
+        if (jobStatus.state === 'failed') {
+            logger.warn('File processing failed', { fileKey, reason: jobStatus.reason });
+            return {
+                statusCode: 422,
+                headers,
+                body: JSON.stringify({
+                    error: 'Processing failed',
+                    message: jobStatus.reason,
+                }),
+            };
+        }
+
+        logger.info('Generating download URL for processed file', {
+            inputKey: fileKey,
+            outputKey: jobStatus.audioKey,
+        });
+
+        // Generate presigned URL for download
+        const result = await generatePresignedDownloadUrl({
+            fileKey: jobStatus.audioKey,
+            bucketName: OUTPUT_BUCKET,
+        });
+
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ ...result, truncated: jobStatus.truncated }),
+        };
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
         logger.error('Error generating presigned download URL', {
             error: errorMessage,
