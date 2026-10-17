@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@aws-lambda-powertools/logger": "^2.28.1",
+    "@aws-sdk/client-dynamodb": "^3.932.0",
     "@aws-sdk/client-polly": "^3.932.0",
     "@aws-sdk/client-s3": "^3.932.0",
     "@aws-sdk/client-sqs": "^3.933.0",

@@ -4,6 +4,7 @@ import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { S3BucketsConstruct } from './constructs/storage/s3Buckets.construct';
 import { UploadApiConstruct } from './constructs/handlers/uploadApi.construct';
 import { PollyPressEventConstruct } from './constructs/events/pollyPressEvent.construct';
+import { PollyBudgetConstruct } from './constructs/billing/pollyBudget.construct';
 
 export type PollyPressBackendStackProps = StackProps & {
     appName: string;
@@ -11,6 +12,10 @@ export type PollyPressBackendStackProps = StackProps & {
     domainName?: string;
     subdomain?: string;
     certificate?: acm.ICertificate;
+    dailyCharacterLimit: number;
+    budgetMonthlyUsd: number;
+    // Budget alerts are only created when an email is configured
+    budgetAlertEmail?: string;
 };
 
 export class PollyPressBackendStack extends Stack {
@@ -19,7 +24,16 @@ export class PollyPressBackendStack extends Stack {
     constructor(scope: Construct, id: string, props: PollyPressBackendStackProps) {
         super(scope, id, props);
 
-        const { appName, stage, domainName, subdomain, certificate } = props;
+        const {
+            appName,
+            stage,
+            domainName,
+            subdomain,
+            certificate,
+            dailyCharacterLimit,
+            budgetMonthlyUsd,
+            budgetAlertEmail,
+        } = props;
 
         const storage = new S3BucketsConstruct(this, 'Storage', {
             appName,
@@ -41,7 +55,17 @@ export class PollyPressBackendStack extends Stack {
             stage,
             inputBucket: storage.inputBucket,
             outputBucket: storage.outputBucket,
+            dailyCharacterLimit,
         });
+
+        if (budgetAlertEmail) {
+            new PollyBudgetConstruct(this, 'PollyBudget', {
+                appName,
+                stage,
+                monthlyLimitUsd: budgetMonthlyUsd,
+                alertEmail: budgetAlertEmail,
+            });
+        }
 
         this.apiUrl = api.apiUrl;
 
