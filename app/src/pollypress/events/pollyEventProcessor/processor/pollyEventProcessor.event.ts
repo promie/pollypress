@@ -279,7 +279,8 @@ export const handler: SQSHandler = async (event: SQSEvent, context: Context): Pr
             ? message.fileId
             : message.key.split('/').pop()?.split('.')[0] as string;
 
-        logger.info('Processing message from queue', { fileId, messageId, receiveCount, message });
+        // `message` is a reserved key in Powertools logs
+        logger.info('Processing message from queue', { fileId, messageId, receiveCount, queueMessage: message });
 
         try {
             if ('type' in message) {
