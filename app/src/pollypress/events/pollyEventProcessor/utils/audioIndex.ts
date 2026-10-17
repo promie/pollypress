@@ -37,15 +37,24 @@ export async function findIndexedAudio(input: { tableName: string; textHash: str
     };
 }
 
-export async function indexAudio(input: { tableName: string; textHash: string; fileId: string; audioKey: string }): Promise<void> {
+export async function indexAudio(input: {
+    tableName: string;
+    textHash: string;
+    fileId: string;
+    audioKey: string;
+    // Defaults to now; the backfill passes the original conversion time
+    convertedAt?: Date;
+}): Promise<void> {
+    const convertedAt = input.convertedAt ?? new Date();
+
     await dynamoClient.send(new PutItemCommand({
         TableName: input.tableName,
         Item: {
             textHash: { S: input.textHash },
             fileId: { S: input.fileId },
             audioKey: { S: input.audioKey },
-            convertedAt: { S: new Date().toISOString() },
-            expiresAt: { N: String(Math.floor(Date.now() / 1000) + INDEX_TTL_SECONDS) },
+            convertedAt: { S: convertedAt.toISOString() },
+            expiresAt: { N: String(Math.floor(convertedAt.getTime() / 1000) + INDEX_TTL_SECONDS) },
         },
     }));
 }

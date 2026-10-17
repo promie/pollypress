@@ -90,6 +90,22 @@ the backend has limits. Set these in a `.env` file at the repo root (not committ
 API Gateway also throttles requests: 20 per second overall, and 1 per second
 (burst 3) for uploads.
 
+## Duplicate Uploads
+
+If a document's text matches something converted in the last 29 days and its MP3
+still exists, the existing audio is returned instantly. It's free and doesn't
+count toward the daily limit. Matching uses a SHA-256 hash of the extracted
+text, so renamed or re-exported copies are recognised.
+
+Audio converted before this feature existed can be added to the index with:
+
+```bash
+npm run backfill:audio-index -- --dry-run   # show what would be indexed
+npm run backfill:audio-index                # write to the index
+```
+
+It is safe to re-run.
+
 ## API Endpoints
 
 | Method | Endpoint | Auth | Description |

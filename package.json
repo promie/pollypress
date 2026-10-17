@@ -14,7 +14,8 @@
     "deploy:infra": "AWS_PROFILE=promie npm run build && AWS_PROFILE=promie npx cdk deploy",
     "diff": "AWS_PROFILE=promie npx cdk diff",
     "synth": "AWS_PROFILE=promie npx cdk synth",
-    "destroy": "AWS_PROFILE=promie npx cdk destroy --all"
+    "destroy": "AWS_PROFILE=promie npx cdk destroy --all",
+    "backfill:audio-index": "AWS_PROFILE=promie npx ts-node scripts/backfillAudioIndex.ts"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.158",
