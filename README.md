@@ -44,13 +44,60 @@ The system follows a clean, serverless architecture:
     npm run dev
     ```
 
+## Passcode
+
+The app is private: `/upload` and `/download` require a shared passcode, sent as
+an `Authorization: Passcode <code>` header. The web app asks for it once and
+remembers it on that device until **Lock on this device** is clicked.
+
+The passcode lives in AWS Secrets Manager as `PollyPress-staging-passcode`. It is
+generated randomly on the first deploy.
+
+**Show the current passcode**
+
+```bash
+aws secretsmanager get-secret-value \
+  --secret-id PollyPress-staging-passcode \
+  --profile promie \
+  --query SecretString \
+  --output text
+```
+
+**Change the passcode**
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id PollyPress-staging-passcode \
+  --profile promie \
+  --secret-string 'your-new-passcode'
+```
+
+No redeploy is needed. The new passcode takes effect within about 5 minutes, and
+anyone still using the old one is asked for the new one. Use single quotes so the
+shell doesn't interpret characters like `!`, `#` or `^`.
+
+## Cost Controls
+
+Amazon Polly bills per character (neural voices are about US$16 per million), so
+the backend has limits. Set these in a `.env` file at the repo root (not committed):
+
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `DAILY_CHARACTER_LIMIT` | `1000000` | Hard cap on characters converted per UTC day (~$16). Larger documents are rejected. |
+| `BUDGET_MONTHLY_USD` | `10` | Monthly Polly budget for email alerts at 50%, 80%, 100% and forecast overrun. |
+| `BUDGET_ALERT_EMAIL` | none | Where budget alerts are sent. No budget is created if unset. |
+
+API Gateway also throttles requests: 20 per second overall, and 1 per second
+(burst 3) for uploads.
+
 ## API Endpoints
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/upload` | Request presigned upload URL |
-| `GET` | `/download` | Request presigned download URL |
-| `GET` | `/status` | API health check |
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/upload` | Passcode | Request presigned upload URL |
+| `GET` | `/download` | Passcode | Get processing progress, or a presigned MP3 download URL when ready |
+| `GET` | `/auth/check` | Passcode | Check that a passcode is valid |
+| `GET` | `/status` | Public | API health check |
 
 ## Project Structure
 
