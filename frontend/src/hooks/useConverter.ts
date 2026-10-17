@@ -14,6 +14,8 @@ export type ConverterState = {
   conversion: ProcessingProgress | null;
   etaSeconds: number | null;
   audioUrl: string | null;
+  // When the audio came from an earlier identical upload (ISO 8601)
+  reusedConvertedAt: string | null;
   // null = not downloading; -1 = downloading, size unknown
   downloadPercent: number | null;
   error: string | null;
@@ -30,6 +32,7 @@ export const initialConverterState: ConverterState = {
   conversion: null,
   etaSeconds: null,
   audioUrl: null,
+  reusedConvertedAt: null,
   downloadPercent: null,
   error: null,
   errorCode: null,
@@ -69,7 +72,7 @@ export function useConverter({ onUnauthorized }: { onUnauthorized: () => void })
       const { fileKey } = await uploadFile(file, (uploadPercent) => update({ uploadPercent }));
       update({ phase: 'converting', uploadPercent: 100 });
 
-      const { downloadUrl } = await pollForAudioFile(fileKey, {
+      const { downloadUrl, reusedFrom } = await pollForAudioFile(fileKey, {
         onProgress: (conversion) => {
           let etaSeconds: number | null = null;
           if (conversion) {
@@ -89,6 +92,7 @@ export function useConverter({ onUnauthorized }: { onUnauthorized: () => void })
         ...prev,
         phase: 'done',
         audioUrl: downloadUrl,
+        reusedConvertedAt: reusedFrom?.convertedAt ?? null,
         conversion: prev.conversion && { ...prev.conversion, completedChunks: prev.conversion.totalChunks },
         etaSeconds: null,
       }));

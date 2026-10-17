@@ -5,6 +5,7 @@ const config = z.object({
     OUTPUT_BUCKET: z.string().min(1),
     PROCESSING_QUEUE_URL: z.string().url(),
     USAGE_TABLE: z.string().min(1),
+    AUDIO_INDEX_TABLE: z.string().min(1),
     DAILY_CHARACTER_LIMIT: z.coerce.number().int().positive(),
 });
 

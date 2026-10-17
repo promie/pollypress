@@ -102,7 +102,7 @@ export const handler: APIGatewayProxyHandler = async (event, context: Context): 
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify(result),
+            body: JSON.stringify({ ...result, reusedFrom: jobStatus.reusedFrom }),
         };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

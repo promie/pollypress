@@ -50,6 +50,15 @@ export class PollyPressEventConstruct extends Construct {
         this.processingQueue = processingQueue;
 
         // Tracks characters converted per day to enforce the daily spend cap
+        // Maps a hash of each document's text to its audio, so duplicates reuse it
+        const audioIndexTable = new dynamodb.Table(this, 'AudioIndexTable', {
+            tableName: `${stackName}-PollyPress-AudioIndex`,
+            partitionKey: { name: 'textHash', type: dynamodb.AttributeType.STRING },
+            billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+            timeToLiveAttribute: 'expiresAt',
+            removalPolicy: RemovalPolicy.DESTROY,
+        });
+
         const usageTable = new dynamodb.Table(this, 'UsageTable', {
             tableName: `${stackName}-PollyPress-Usage`,
             partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
@@ -83,6 +92,7 @@ export class PollyPressEventConstruct extends Construct {
                 OUTPUT_BUCKET: outputBucket.bucketName,
                 PROCESSING_QUEUE_URL: processingQueue.queueUrl,
                 USAGE_TABLE: usageTable.tableName,
+                AUDIO_INDEX_TABLE: audioIndexTable.tableName,
                 DAILY_CHARACTER_LIMIT: String(dailyCharacterLimit),
             } satisfies Record<keyof ProcessorConfig, string>,
         });
@@ -93,6 +103,7 @@ export class PollyPressEventConstruct extends Construct {
         // Queues continuation messages for long documents
         processingQueue.grantSendMessages(this.processorLambda);
         usageTable.grantReadWriteData(this.processorLambda);
+        audioIndexTable.grantReadWriteData(this.processorLambda);
 
         this.processorLambda.addToRolePolicy(
             new iam.PolicyStatement({

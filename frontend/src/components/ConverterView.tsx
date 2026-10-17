@@ -6,6 +6,7 @@ import {
   AlertIcon,
   CheckIcon,
   ClockIcon,
+  HistoryIcon,
   DownloadIcon,
   FileIcon,
   RefreshIcon,
@@ -253,7 +254,7 @@ const WorkingScreen = ({ state }: { state: ConverterState }) => {
 };
 
 const DoneScreen = ({ state, onDownload, onReset }: Pick<ConverterViewProps, 'onDownload' | 'onReset'> & { state: ConverterState }) => {
-  const { audioUrl, downloadPercent, error } = state;
+  const { audioUrl, downloadPercent, error, reusedConvertedAt } = state;
   const downloading = downloadPercent !== null && downloadPercent < 100;
   const saved = downloadPercent === 100;
 
@@ -261,13 +262,33 @@ const DoneScreen = ({ state, onDownload, onReset }: Pick<ConverterViewProps, 'on
     <>
       <div className="mb-6 flex items-center gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
-          <CheckIcon className="h-6 w-6" />
+          {reusedConvertedAt ? <HistoryIcon className="h-6 w-6" /> : <CheckIcon className="h-6 w-6" />}
         </div>
         <div>
-          <p className="text-xl font-bold text-slate-900 dark:text-white">Your audio is ready</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Listen right here or save the MP3.</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">
+            {reusedConvertedAt ? "You've converted this before" : 'Your audio is ready'}
+          </p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {reusedConvertedAt ? 'Here’s the audio from last time, ready instantly.' : 'Listen right here or save the MP3.'}
+          </p>
         </div>
       </div>
+
+      {reusedConvertedAt && (
+        <div className="mb-6 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/30">
+          Originally converted{' '}
+          <span className="font-semibold">
+            {new Date(reusedConvertedAt).toLocaleString(undefined, {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              hour: 'numeric',
+              minute: '2-digit',
+            })}
+          </span>
+          . Reusing it didn't count toward today's limit.
+        </div>
+      )}
 
       {audioUrl && (
         <audio controls src={audioUrl} preload="metadata" className="w-full rounded-full">

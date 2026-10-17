@@ -30,6 +30,13 @@ export const previewStates: Record<string, ConverterState> = {
     etaSeconds: 150,
   },
   done: { ...initialConverterState, phase: 'done', file: report, audioUrl: 'data:audio/mpeg;base64,' },
+  'done-reused': {
+    ...initialConverterState,
+    phase: 'done',
+    file: sampleFile('Annual Report 2025 (copy).pdf', 4_820_000),
+    audioUrl: 'data:audio/mpeg;base64,',
+    reusedConvertedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+  },
   downloading: {
     ...initialConverterState,
     phase: 'done',

@@ -7,6 +7,8 @@ export type DownloadResponse = {
   downloadUrl: string;
   fileKey: string;
   expiresIn: number;
+  // Present when identical text was converted before and its audio reused
+  reusedFrom?: { fileId: string; convertedAt: string };
 };
 
 export type ProcessingProgress = {

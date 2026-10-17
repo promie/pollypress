@@ -13,6 +13,11 @@ export const jobStatusSchema = z.discriminatedUnion('state', [
     z.object({
         state: z.literal('completed'),
         audioKey: z.string().min(1),
+        // Set when identical text was converted before and its audio was reused
+        reusedFrom: z.object({
+            fileId: z.string().min(1),
+            convertedAt: z.string().datetime(),
+        }).optional(),
     }),
     z.object({
         state: z.literal('failed'),

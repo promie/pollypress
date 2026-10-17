@@ -6,6 +6,7 @@ import {
     CreateMultipartUploadCommand,
     UploadPartCommand,
     CompleteMultipartUploadCommand,
+    HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
@@ -21,6 +22,7 @@ import {
 } from '../receiver/queueMessageSchema';
 import { streamToBuffer, extractText, normalizeText, UnprocessableFileError } from '../utils/fileUtils';
 import { splitIntoChunks, mapWithConcurrency } from '../utils/textChunker';
+import { findIndexedAudio, hashText, indexAudio } from '../utils/audioIndex';
 import {
     reserveDailyCharacters,
     describeAudioLength,
@@ -181,7 +183,42 @@ const synthesize = async (state: SynthesisState, text: string, context: Context)
 
     await writeStatus(fileId, { state: 'completed', audioKey: audioKey(fileId) });
 
+    // Remember this audio so identical uploads can reuse it instead of paying again
+    await indexAudio({
+        tableName: config.AUDIO_INDEX_TABLE,
+        textHash: hashText(text),
+        fileId,
+        audioKey: audioKey(fileId),
+    }).catch((error) => logger.warn('Failed to index audio for reuse', { fileId, error }));
+
     logger.info('Speech synthesis completed', { fileId, totalChunks, parts: parts.length });
+};
+
+/**
+ * If identical text was converted recently and its audio still exists, points
+ * this upload at that audio instead of converting again. Costs nothing and
+ * doesn't count toward the daily limit.
+ */
+const reuseExistingAudio = async (fileId: string, text: string): Promise<boolean> => {
+    const existing = await findIndexedAudio({ tableName: config.AUDIO_INDEX_TABLE, textHash: hashText(text) });
+    if (!existing || existing.fileId === fileId) {
+        return false;
+    }
+
+    try {
+        await s3Client.send(new HeadObjectCommand({ Bucket: config.OUTPUT_BUCKET, Key: existing.audioKey }));
+    } catch {
+        logger.info('Indexed audio no longer exists, converting again', { fileId, existing });
+        return false;
+    }
+
+    await writeStatus(fileId, {
+        state: 'completed',
+        audioKey: existing.audioKey,
+        reusedFrom: { fileId: existing.fileId, convertedAt: existing.convertedAt },
+    });
+    logger.info('Reused audio from an identical earlier upload', { fileId, reusedFrom: existing.fileId });
+    return true;
 };
 
 /**
@@ -223,6 +260,10 @@ const startProcessing = async (message: QueueMessage, fileId: string, context: C
         throw new UnprocessableFileError(
             'No readable text found in the file. Scanned or image-only PDFs are not supported.'
         );
+    }
+
+    if (await reuseExistingAudio(fileId, text)) {
+        return;
     }
 
     // Hard ceiling on Polly spend: Polly bills per character
